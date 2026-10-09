@@ -1,0 +1,13 @@
+.venv/
+.venv-win/
+__pycache__/
+*.pyc
+.env
+documents/*
+!documents/.gitkeep
+reports/
+*.docx
+*.pdf
+*.xlsx
+*.pptx
+*.zip
