@@ -5,15 +5,17 @@ from unittest.mock import patch
 from docx import Document
 from fastapi.testclient import TestClient
 
-from app.dependencies import sessions
+from app.sessions import sessions
 from app.tools.edit import create_edit_tool, replace_text
 from app.main import app
+from tests.fake_database import mock_database
 
 
 class EditTests(unittest.TestCase):
     def setUp(self):
         sessions.clear()
         self.client = TestClient(app)
+        mock_database(self)
 
     def tearDown(self):
         self.client.close()
@@ -61,11 +63,21 @@ class EditTests(unittest.TestCase):
         self.assertTrue(edited.paragraphs[0].runs[0].bold)
         self.assertEqual(self.client.get('/api/document/download').content, original)
 
-    def test_rejects_ambiguous_large_and_unsupported_edits(self):
+    def test_large_text_and_docx_can_be_edited(self):
+        text = 'old' + 'x' * 20_001
+        self.assertEqual(replace_text(text.encode(), 'note.txt', 'old', 'new').decode(), 'new' + 'x' * 20_001)
+        document = Document()
+        document.add_paragraph(text)
+        output = io.BytesIO()
+        document.save(output)
+        self.client.post('/api/document', files={'file': ('large.docx', output.getvalue())})
+        token = self.client.cookies.get('chat_session')
+        self.assertIn('Edited copy ready', create_edit_tool(token).invoke({'old_text': 'old', 'new_text': 'new'}))
+        self.assertEqual(sessions[token].document, 'new' + 'x' * 20_001)
+
+    def test_rejects_ambiguous_and_unsupported_edits(self):
         with self.assertRaises(ValueError):
             replace_text(b'old old', 'note.txt', 'old', 'new')
-        with self.assertRaises(ValueError):
-            replace_text(b'old' + b'x' * 20_001, 'note.txt', 'old', 'new')
         with self.assertRaises(ValueError):
             replace_text(b'MZ', 'program.exe', 'MZ', 'changed')
         self.client.post('/api/document', files={'file': ('program.exe', b'MZ')})

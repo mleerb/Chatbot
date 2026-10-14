@@ -6,15 +6,17 @@ from docx import Document
 
 from fastapi.testclient import TestClient
 
-from app.dependencies import sessions
+from app.sessions import sessions
 from app.tools.create import create_file_tool, validate_file
 from app.main import app
+from tests.fake_database import mock_database
 
 
 class GeneratedFileTests(unittest.TestCase):
     def setUp(self):
         sessions.clear()
         self.client = TestClient(app)
+        mock_database(self)
 
     def tearDown(self):
         self.client.close()

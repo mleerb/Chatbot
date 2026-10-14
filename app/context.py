@@ -1,5 +1,4 @@
 from app.prompts import render_prompt
-from app.extract import MAX_TEXT_CHARS
 
 MAX_HISTORY_MESSAGES = 12
 
@@ -21,7 +20,7 @@ def conversation_messages(question: str, history: list[dict], document_text: str
     if document_text:
         messages.append({
             "role": "user",
-            "content": render_prompt("document.j2", document_text=document_text[:MAX_TEXT_CHARS]),
+            "content": render_prompt("document.j2", document_text=document_text),
         })
     if filename and not document_text and not image_url:
         messages.append({"role": "user", "content": render_prompt("unreadable.j2", upload_name=filename)})

@@ -3,7 +3,7 @@ from pathlib import Path
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from app.dependencies import sessions, sessions_lock
+from app.sessions import sessions, sessions_lock
 from app.file_types import TEXT_EXTENSIONS
 from app.formats import GENERATORS
 

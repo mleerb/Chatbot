@@ -5,8 +5,8 @@ from docx import Document
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from app.dependencies import sessions, sessions_lock
-from app.extract import MAX_TEXT_CHARS, extract_docx, file_context
+from app.sessions import sessions, sessions_lock
+from app.extract import file_context
 from app.file_types import TEXT_EXTENSIONS
 
 
@@ -24,8 +24,6 @@ def replace_text(data: bytes, filename: str, old_text: str, new_text: str) -> by
             text = data.decode("utf-8-sig")
         except UnicodeDecodeError as exc:
             raise ValueError("Uploaded text file is not valid UTF-8.") from exc
-        if len(text) > MAX_TEXT_CHARS:
-            raise ValueError("File is too long to edit safely; only the first 20,000 characters were shown to the agent.")
         if text.count(old_text) != 1:
             raise ValueError("Text to replace must occur exactly once in the uploaded file.")
         updated = text.replace(old_text, new_text, 1)
@@ -34,8 +32,6 @@ def replace_text(data: bytes, filename: str, old_text: str, new_text: str) -> by
         raise ValueError("Editing is supported only for UTF-8 text and .docx files.")
     try:
         document = Document(io.BytesIO(data))
-        if len(extract_docx(data)) > MAX_TEXT_CHARS:
-            raise ValueError("File is too long to edit safely; only the first 20,000 characters were shown to the agent.")
         paragraphs = list(document.paragraphs)
         for table in document.tables:
             for row in table.rows:

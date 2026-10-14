@@ -7,8 +7,9 @@ from fastapi.testclient import TestClient
 
 from app.agent import make_agent
 from app.context import conversation_messages
-from app.dependencies import sessions
+from app.sessions import sessions
 from app.main import app
+from tests.fake_database import mock_database
 from app.tools.search import create_search_tool, search_web
 
 
@@ -16,6 +17,7 @@ class SearchTests(unittest.TestCase):
     def setUp(self):
         sessions.clear()
         self.client = TestClient(app)
+        mock_database(self)
 
     def tearDown(self):
         self.client.close()

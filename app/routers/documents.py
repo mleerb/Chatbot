@@ -3,7 +3,7 @@ from pathlib import Path
 from fastapi import APIRouter, File, HTTPException, Request, Response, UploadFile
 from starlette.concurrency import run_in_threadpool
 
-from app.dependencies import session_for
+from app.sessions import session_for
 from app.download import download_response
 from app.extract import file_context
 
@@ -22,6 +22,8 @@ async def upload_document(request: Request, response: Response, file: UploadFile
         await file.close()
     text, image_url, status = await run_in_threadpool(file_context, filename, data)
     with session.lock:
+        if session.user_id is None:
+            raise HTTPException(status_code=400, detail="Select a user before uploading")
         session.set_upload(filename, data, text, image_url, status)
     return {"filename": filename, "status": status}
 

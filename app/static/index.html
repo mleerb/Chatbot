@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#e5f0ef">
-  <title>Document Chat</title>
+  <title>AGENTslop</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -14,12 +14,21 @@
       <div class="brand">
         <span class="brand-mark" aria-hidden="true">◈</span>
         <div>
-          <h1>Document Chat</h1>
+          <h1>AGENTslop</h1>
           <p>A place to read, ask, and make.</p>
         </div>
       </div>
       <button id="theme-toggle" class="theme-toggle glass-inset" type="button" aria-label="Switch to dark theme">Dark mode</button>
     </header>
+    <section class="people glass-surface" aria-label="Chat users">
+      <label for="user-select">Conversation with</label>
+      <select id="user-select" aria-label="Select user"><option value="">Select a user</option></select>
+      <form id="user-form">
+        <label for="user-name" class="sr-only">New user name</label>
+        <input id="user-name" maxlength="100" placeholder="New user name" required>
+        <button type="submit">Add user</button>
+      </form>
+    </section>
     <section class="document glass-surface" aria-label="File workspace">
       <div class="shelf-heading">
         <span class="eyebrow">THE WORKBENCH / FILE</span>
@@ -29,10 +38,8 @@
         <h2>Bring a file<br><em>into focus.</em></h2>
         <p>Upload a file to discuss it, or simply start a conversation.</p>
       </div>
-      <label class="upload-label" for="file">Choose a file</label>
       <div class="file-row">
-        <input id="file" type="file" aria-label="Choose a file">
-        <small id="file-status">No file selected. You can still chat normally.</small>
+        <small id="file-status" hidden></small>
         <a id="download" class="subtle glass-inset" href="/api/document/download" download hidden>Download original</a>
         <a id="edited-download" class="subtle glass-inset" href="/api/document/edited" download hidden>Download edited copy</a>
         <button id="remove" type="button" class="subtle glass-inset" hidden>Remove file</button>
@@ -50,6 +57,8 @@
     <div class="generated"><a id="generated-download" class="subtle glass-inset" href="/api/files/download" download hidden>Download generated file</a></div>
     <p id="error" class="error" role="alert" hidden></p>
     <form id="chat-form" class="composer glass-surface">
+      <input id="file" type="file" aria-label="Choose a file" hidden>
+      <button id="attach" type="button" class="attach glass-inset" aria-label="Attach a file" title="Attach a file">＋ <span>Attach file</span></button>
       <label for="message" class="sr-only">Your message</label>
       <input id="message" name="message" placeholder="Ask a question…" autocomplete="off" maxlength="10000" required>
       <button id="send" type="submit">Send <span aria-hidden="true">↗</span></button>

@@ -7,9 +7,6 @@ from PIL import Image, UnidentifiedImageError
 
 from app.file_types import IMAGE_EXTENSIONS, TEXT_EXTENSIONS
 
-MAX_TEXT_CHARS = 20_000
-
-
 def extract_docx(data: bytes) -> str:
     document = Document(io.BytesIO(data))
     parts = []
@@ -54,5 +51,4 @@ def file_context(filename: str, data: bytes) -> tuple[str, str, str]:
         return "", "", "File accepted, but this file type cannot be analyzed. It will not be executed."
     if not text.strip():
         return "", "", "File accepted, but no readable text was found."
-    truncated = len(text) > MAX_TEXT_CHARS
-    return text[:MAX_TEXT_CHARS], "", ("First 20,000 characters available to chat." if truncated else "Text ready for chat.")
+    return text, "", "Text ready for chat."

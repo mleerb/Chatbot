@@ -12,6 +12,7 @@ MAX_SESSIONS = 100
 
 @dataclass
 class ChatSession:
+    user_id: int | None = None
     history: list[dict] = field(default_factory=list)
     document: str = ""
     image_url: str = ""
@@ -31,7 +32,6 @@ class ChatSession:
         self.file_bytes = data
         self.edited_bytes = None
         self.file_status = status
-        self.history.clear()
 
     def clear_upload(self) -> None:
         self.document = ""
@@ -40,7 +40,6 @@ class ChatSession:
         self.file_bytes = None
         self.edited_bytes = None
         self.file_status = ""
-        self.history.clear()
 
 
 sessions: dict[str, ChatSession] = {}

@@ -6,7 +6,8 @@ from docx import Document
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.dependencies import sessions
+from app.sessions import sessions
+from tests.fake_database import mock_database
 
 
 def word_file(text: str) -> bytes:
@@ -21,6 +22,7 @@ class WebTests(unittest.TestCase):
     def setUp(self):
         sessions.clear()
         self.client = TestClient(app)
+        self.database = mock_database(self)
 
     def tearDown(self):
         self.client.close()
@@ -28,7 +30,19 @@ class WebTests(unittest.TestCase):
 
     def test_page_upload_chat_and_remove(self):
         self.assertEqual(self.client.get('/').status_code, 200)
-        self.assertIn('Document Chat', self.client.get('/').text)
+        page = self.client.get('/').text
+        self.assertIn('<title>AGENTslop</title>', page)
+        self.assertIn('<h1>AGENTslop</h1>', page)
+        self.assertEqual(app.title, 'AGENTslop')
+        self.assertNotIn('No file selected. You can still chat normally.', page)
+        self.assertNotIn('Local demo: anyone using this browser can select any user and read their chats.', page)
+        self.assertIn('id="file-status" hidden', page)
+        self.assertIn('id="attach"', page)
+        script = self.client.get('/static/chat.js')
+        self.assertEqual(script.status_code, 200)
+        self.assertIn("const attachButton = element('#attach')", script.text)
+        self.assertIn('id="file" type="file" aria-label="Choose a file" hidden', page)
+        self.assertLess(page.index('id="chat-form"'), page.index('id="file"'))
         with patch('app.routers.chat.make_agent', return_value=object()), patch(
             'app.routers.chat.answer_question', return_value='Found it'
         ) as answer:
@@ -54,6 +68,7 @@ class WebTests(unittest.TestCase):
             self.assertNotIn('Private note', str(state))
             self.assertEqual(self.client.delete('/api/document').status_code, 200)
             self.assertEqual(self.client.get('/api/state').json()['filename'], '')
+            self.assertEqual(len(self.client.get('/api/state').json()['messages']), 2)
             self.assertEqual(self.client.get('/api/document/download').status_code, 404)
 
     def test_sessions_are_isolated(self):
@@ -66,9 +81,16 @@ class WebTests(unittest.TestCase):
         text = b'# Heading\n' + b'a' * 1_000_001
         response = self.client.post('/api/document', files={'file': ('big.md', text)})
         self.assertEqual(response.status_code, 200)
-        self.assertIn('First 20,000 characters', response.json()['status'])
+        self.assertEqual(response.json()['status'], 'Text ready for chat.')
         self.assertEqual(self.client.get('/api/state').json()['filename'], 'big.md')
-        self.assertEqual(len(next(iter(sessions.values())).document), 20_000)
+        self.assertEqual(next(iter(sessions.values())).document, text.decode('utf-8'))
+
+    def test_large_docx_text_is_available_to_chat(self):
+        text = 'start ' + 'a' * 20_001 + ' end'
+        response = self.client.post('/api/document', files={'file': ('large.docx', word_file(text))})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['status'], 'Text ready for chat.')
+        self.assertEqual(next(iter(sessions.values())).document, text)
 
     def test_binary_upload_is_accepted_but_not_interpreted(self):
         response = self.client.post('/api/document', files={'file': ('program.exe', b'MZ' + b'X' * 1_000_001)})
@@ -102,6 +124,7 @@ class WebTests(unittest.TestCase):
     def test_replacement_and_session_isolation_of_downloads(self):
         self.assertEqual(self.client.get('/api/document/download').status_code, 404)
         with TestClient(app) as another:
+            another.post('/api/users/1/select')
             self.client.post('/api/document', files={'file': ('a.txt', b'first')})
             self.assertEqual(another.get('/api/document/download').status_code, 404)
             another.post('/api/document', files={'file': ('b.txt', b'other')})

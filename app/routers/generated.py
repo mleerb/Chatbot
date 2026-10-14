@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Request, Response
 
-from app.dependencies import session_for
+from app.sessions import session_for
 from app.download import download_response
 
 router = APIRouter(prefix="/api/files", tags=["files"])

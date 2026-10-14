@@ -1,6 +1,8 @@
 # Setup and validation
 
-On Windows PowerShell, activate `.venv-win/Scripts/Activate.ps1`, install `requirements.txt`, and start `python -m uvicorn app.main:app --host 127.0.0.1 --port 8000`. Open http://127.0.0.1:8000 (`/docs` for API docs); Ctrl+C stops the server.
+On Windows PowerShell, activate `.venv-win/Scripts/Activate.ps1`, install `requirements.txt`, create a local PostgreSQL database and set `DATABASE_URL=postgresql://USERNAME:PASSWORD@127.0.0.1:5432/DATABASE` in `.env` (URL-encode special characters in credentials). The app creates `chat_users` and `chat_messages` tables and an index at startup; the database user needs schema CREATE privileges. Start `python -m uvicorn app.main:app --host 127.0.0.1 --port 8000`. Open http://127.0.0.1:8000 (`/docs` for API docs); Ctrl+C stops the server.
+
+For frontend changes, install Node.js and run `npm ci`, `npm run typecheck`, then `npm run build` from the project root. Edit `frontend/chat.ts`, not the generated `app/static/chat.js`; keep the compiled JavaScript checked in. FastAPI serves the compiled file and does not require Node.js at runtime.
 
 The root `.env` is loaded at startup and must not be shared or committed. Set `OPENAI_API_KEY` and optionally `CHAT_MODEL` (default `openai:gpt-4o-mini`) and `OPENAI_BASE_URL` for an HTTPS OpenAI-compatible gateway. With a gateway, the model ID is passed unchanged. Existing shell variables override `.env`; restart after changes. A vision-capable model/gateway is required to analyze uploaded images.
 
@@ -8,4 +10,6 @@ Optional Tavily web search requires `TAVILY_API_KEY` in `.env`. Without it, the 
 
 Optional Langfuse tracing requires `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, and `LANGFUSE_BASE_URL` (EU `https://cloud.langfuse.com`, US `https://us.cloud.langfuse.com`). Input, output, and prompt content are redacted before export by default; `LANGFUSE_TRACE_CONTENT=true` opts into exporting content. With redaction on, Langfuse can show model usage, tool calls and failures but cannot reveal the question or answer for quality debugging. Do not disable redaction unless authorized to export uploaded content. Chat failures mark the root observation as ERROR with a generic status; private exception details stay out of the status. The model provider still receives readable text or image context. Traces are flushed at shutdown.
 
-Validate with `.venv-win/Scripts/python.exe -m unittest discover -s tests`. Smoke-check `app.main:app` with `.venv-win/Scripts/python.exe -c "from app.main import app; from fastapi.testclient import TestClient; assert TestClient(app).get('/').status_code == 200"`.
+Create a user in the browser, select them, and chat; selecting that user again (including after a restart) loads their complete history. Each user has one continuous conversation. Only the last 12 messages are sent to the model. Switching users clears temporary uploads/downloads; uploaded file bytes and generated files are never saved in PostgreSQL. This is not authentication: anyone who can reach the local app can select any user and read their messages. Do not expose it publicly. A working PostgreSQL server is required for runtime startup; tests mock the store and do not exercise a real database.
+
+Validate frontend changes with `npm run typecheck` and `npm run build`, then run `.venv-win/Scripts/python.exe -m unittest discover -s tests`. Smoke-check `app.main:app` with `.venv-win/Scripts/python.exe -c "from app.main import app; from fastapi.testclient import TestClient; assert TestClient(app).get('/').status_code == 200"`.

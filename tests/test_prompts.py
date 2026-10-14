@@ -5,7 +5,6 @@ from jinja2 import UndefinedError
 
 from app.agent import make_agent
 from app.context import conversation_messages
-from app.extract import MAX_TEXT_CHARS
 from app.prompts import render_prompt
 
 
@@ -23,15 +22,13 @@ class PromptTests(unittest.TestCase):
         self.assertIn("edit_uploaded_file", render_prompt("system.j2"))
         self.assertIn("Never send file", render_prompt("system.j2"))
 
-    def test_document_template_renders_literal_text_and_limits_length(self):
-        document = "Literal {{ not_a_variable }} " + "x" * MAX_TEXT_CHARS
+    def test_document_template_renders_all_text_literally(self):
+        document = "Literal {{ not_a_variable }} " + "x" * 20_001 + " END"
         messages = conversation_messages("Summarize", [], document)
         self.assertEqual(len(messages), 2)
         content = messages[0]["content"]
         self.assertIn("{{ not_a_variable }}", content)
-        self.assertIn(document[:MAX_TEXT_CHARS], content)
-        self.assertNotIn(document[:MAX_TEXT_CHARS + 1], content)
-        self.assertEqual(content.split("<document>\n", 1)[1].split("\n</document>", 1)[0], document[:MAX_TEXT_CHARS])
+        self.assertEqual(content.split("<document>\n", 1)[1].split("\n</document>", 1)[0], document)
         self.assertEqual(messages[1], {"role": "user", "content": "Summarize"})
 
     def test_image_and_unreadable_file_messages(self):
