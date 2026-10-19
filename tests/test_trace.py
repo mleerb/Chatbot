@@ -8,7 +8,7 @@ from langchain_core.language_models.fake_chat_models import FakeListChatModel
 from langfuse import Langfuse
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-from app import trace
+from app.core import trace
 
 
 class FakeToolsChatModel(FakeListChatModel):
@@ -38,7 +38,7 @@ class TracingTests(unittest.TestCase):
             "LANGFUSE_PUBLIC_KEY": "pk-lf-test",
             "LANGFUSE_SECRET_KEY": "sk-lf-test",
             "LANGFUSE_BASE_URL": "http://localhost:9999",
-        }), patch('app.trace.get_tracing_client', return_value=client):
+        }), patch('app.core.trace.get_tracing_client', return_value=client):
             with self.assertRaisesRegex(ValueError, "Private failure detail"):
                 with trace.trace_chat_turn(
                     session_id="test-session", question="Private question",

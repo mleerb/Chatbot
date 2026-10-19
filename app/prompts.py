@@ -1,8 +1,7 @@
-from pathlib import Path
-
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-PROMPT_DIR = Path(__file__).resolve().parent / "prompts"
+from app.core.config import PROMPT_DIR
+
 TEMPLATES = Environment(
     loader=FileSystemLoader(PROMPT_DIR, encoding="utf-8"),
     undefined=StrictUndefined,

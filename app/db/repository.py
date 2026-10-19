@@ -1,8 +1,4 @@
-import os
-from contextlib import contextmanager
-
-import psycopg
-from psycopg.rows import dict_row
+from app.db.connection import connection
 
 
 SCHEMA = """
@@ -21,19 +17,6 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 );
 CREATE INDEX IF NOT EXISTS chat_messages_user_id_id ON chat_messages (user_id, id);
 """
-
-
-def database_url():
-    url = os.getenv("DATABASE_URL", "").strip()
-    if not url:
-        raise RuntimeError("Set DATABASE_URL to a PostgreSQL connection string")
-    return url
-
-
-@contextmanager
-def connection():
-    with psycopg.connect(database_url(), row_factory=dict_row, connect_timeout=5) as conn:
-        yield conn
 
 
 def initialize():

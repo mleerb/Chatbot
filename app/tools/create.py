@@ -3,8 +3,8 @@ from pathlib import Path
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from app.sessions import sessions, sessions_lock
-from app.file_types import TEXT_EXTENSIONS
+from app.services.sessions import Download, sessions, sessions_lock
+from app.core.file_types import TEXT_EXTENSIONS
 from app.formats import GENERATORS
 
 
@@ -39,8 +39,8 @@ def create_file_tool(token: str):
             session = sessions.get(token)
         if session is None:
             return "Session expired; file was not created."
-        session.generated_filename = name
-        session.generated_bytes = data
-        return f"Created downloadable file: {name}"
+        item = Download(name, data)
+        session.generated[item.id] = item
+        return f"Created downloadable file: {name} (file_id={item.id})"
 
     return create_text_file

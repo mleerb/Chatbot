@@ -6,7 +6,7 @@ from docx import Document
 
 from fastapi.testclient import TestClient
 
-from app.sessions import sessions
+from app.services.sessions import sessions
 from app.tools.create import create_file_tool, validate_file
 from app.main import app
 from tests.fake_database import mock_database
@@ -28,23 +28,23 @@ class GeneratedFileTests(unittest.TestCase):
         token = self.client.cookies.get('chat_session')
         session = sessions[token]
 
-        def reply(agent, *args):
+        def reply(agent, *args, **kwargs):
             result = agent.invoke({'filename': 'notes.md', 'content': '# Hello\n'})
             self.assertIn('Created downloadable file', result)
             return 'Your file is ready.'
 
-        with patch('app.routers.chat.make_agent', side_effect=lambda token, question, sources: create_file_tool(token)), patch(
-            'app.routers.chat.answer_question', side_effect=reply
+        with patch('app.services.chat.make_agent', side_effect=lambda token, question, sources: create_file_tool(token)), patch(
+            'app.services.chat.answer_question', side_effect=reply
         ):
             result = self.client.post('/api/chat', json={'message': 'Create notes.md'})
         self.assertEqual(result.status_code, 200)
-        self.assertEqual(result.json()['generated_filename'], 'notes.md')
-        self.assertEqual(session.generated_bytes, b'# Hello\n')
+        self.assertEqual(result.json()['generated_files'][0]['filename'], 'notes.md')
+        self.assertEqual(session.latest_generated.data, b'# Hello\n')
         download = self.client.get('/api/files/download')
         self.assertEqual(download.content, b'# Hello\n')
         self.assertIn("filename*=UTF-8''notes.md", download.headers['content-disposition'])
         self.assertEqual(download.headers['x-content-type-options'], 'nosniff')
-        self.assertEqual(self.client.get('/api/state').json()['generated_filename'], 'notes.md')
+        self.assertEqual(self.client.get('/api/state').json()['generated_files'][0]['filename'], 'notes.md')
         with TestClient(app) as other:
             self.assertEqual(other.get('/api/files/download').status_code, 404)
 
@@ -74,7 +74,7 @@ class GeneratedFileTests(unittest.TestCase):
         self.assertIn("filename*=UTF-8''report.docx", download.headers['content-disposition'])
         document = Document(io.BytesIO(download.content))
         self.assertEqual([paragraph.text for paragraph in document.paragraphs], ['First line', 'Second line'])
-        self.assertEqual(self.client.get('/api/state').json()['generated_filename'], 'report.docx')
+        self.assertEqual(self.client.get('/api/state').json()['generated_files'][0]['filename'], 'report.docx')
 
     def test_tool_rejects_unsafe_output_without_overwriting(self):
         self.client.get('/api/state')

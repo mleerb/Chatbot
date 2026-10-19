@@ -31,9 +31,9 @@ class FakeDatabase:
 
 def mock_database(test):
     database = FakeDatabase()
-    patches = [patch(f"app.database.{name}", getattr(database, name)) for name in
+    patches = [patch(f"app.db.repository.{name}", getattr(database, name)) for name in
                ("users", "create_user", "get_user", "messages", "save_turn")]
-    patches.append(patch("app.database.initialize"))
+    patches.append(patch("app.db.repository.initialize"))
     for item in patches:
         item.start()
         test.addCleanup(item.stop)

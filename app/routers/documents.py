@@ -1,54 +1,34 @@
-from pathlib import Path
-
-from fastapi import APIRouter, File, HTTPException, Request, Response, UploadFile
+from fastapi import APIRouter, File, UploadFile
 from starlette.concurrency import run_in_threadpool
 
-from app.sessions import session_for
-from app.download import download_response
-from app.extract import file_context
+from app.dependencies import Session
+from app.responses import download_response
+from app.schemas.documents import RemovalResponse, UploadResponse
+from app.services import documents as service
 
-router = APIRouter(prefix="/api/document", tags=["document"])
+router = APIRouter(prefix="/document", tags=["document"])
 
 
-@router.post("")
-async def upload_document(request: Request, response: Response, file: UploadFile = File(...)):
-    _, session = session_for(request, response)
-    filename = Path((file.filename or "").replace("\\", "/")).name
-    if not filename:
-        raise HTTPException(status_code=400, detail="Choose a file")
+@router.post("", response_model=UploadResponse)
+async def upload_document(current: Session, file: UploadFile = File(...)):
     try:
         data = await file.read()
     finally:
         await file.close()
-    text, image_url, status = await run_in_threadpool(file_context, filename, data)
-    with session.lock:
-        if session.user_id is None:
-            raise HTTPException(status_code=400, detail="Select a user before uploading")
-        session.set_upload(filename, data, text, image_url, status)
-    return {"filename": filename, "status": status}
+    return await run_in_threadpool(service.upload, current[1], file.filename or "", data)
 
 
 @router.get("/download")
-def download_document(request: Request, response: Response):
-    _, session = session_for(request, response)
-    with session.lock:
-        if session.file_bytes is None:
-            raise HTTPException(status_code=404, detail="No file uploaded")
-        return download_response(session.filename, session.file_bytes)
+def download_document(current: Session, file_id: str | None = None):
+    return download_response(*service.original(current[1], file_id))
 
 
 @router.get("/edited")
-def download_edited_document(request: Request, response: Response):
-    _, session = session_for(request, response)
-    with session.lock:
-        if session.edited_bytes is None:
-            raise HTTPException(status_code=404, detail="No edited file available")
-        return download_response(session.filename, session.edited_bytes)
+def download_edited_document(current: Session, file_id: str | None = None,
+                             revision_id: str | None = None):
+    return download_response(*service.edited(current[1], file_id, revision_id))
 
 
-@router.delete("")
-def remove_document(request: Request, response: Response):
-    _, session = session_for(request, response)
-    with session.lock:
-        session.clear_upload()
-    return {"ok": True}
+@router.delete("", response_model=RemovalResponse)
+def remove_document(current: Session, file_id: str | None = None):
+    return service.remove(current[1], file_id)

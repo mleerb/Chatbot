@@ -5,9 +5,9 @@ from unittest.mock import Mock, patch
 import httpx
 from fastapi.testclient import TestClient
 
-from app.agent import make_agent
-from app.context import conversation_messages
-from app.sessions import sessions
+from app.services.agent import make_agent
+from app.services.context import conversation_messages
+from app.services.sessions import sessions
 from app.main import app
 from tests.fake_database import mock_database
 from app.tools.search import create_search_tool, search_web
@@ -44,7 +44,7 @@ class SearchTests(unittest.TestCase):
         self.assertNotIn('private file contents', str(kwargs))
 
     def test_agent_exposes_search_only_when_configured(self):
-        with patch('app.agent.chat_model', return_value='openai:test'), patch('app.agent.create_deep_agent', return_value=object()) as factory:
+        with patch('app.services.agent.chat_model', return_value='openai:test'), patch('app.services.agent.create_deep_agent', return_value=object()) as factory:
             with patch.dict(os.environ, {"TAVILY_API_KEY": ""}):
                 make_agent('token', 'question', [])
                 self.assertEqual(len(factory.call_args.kwargs['tools']), 2)
@@ -54,10 +54,10 @@ class SearchTests(unittest.TestCase):
 
     def test_evidence_in_response_and_state_but_not_model_history(self):
         self.client.post('/api/document', files={'file': ('private.md', b'private file contents')})
-        def answer(agent, question, history, *args):
+        def answer(agent, question, history, *args, **kwargs):
             agent.invoke({})
             return 'See evidence.'
-        with patch.dict(os.environ, {"TAVILY_API_KEY": "test-key"}), patch('app.routers.chat.make_agent', side_effect=lambda token, question, sources: create_search_tool(question, sources)), patch('app.routers.chat.answer_question', side_effect=answer), patch('app.tools.search.search_web', return_value=[{'title': 'Source', 'url': 'https://example.com', 'content': 'Result'}]):
+        with patch.dict(os.environ, {"TAVILY_API_KEY": "test-key"}), patch('app.services.chat.make_agent', side_effect=lambda token, question, sources: create_search_tool(question, sources)), patch('app.services.chat.answer_question', side_effect=answer), patch('app.tools.search.search_web', return_value=[{'title': 'Source', 'url': 'https://example.com', 'content': 'Result'}]):
             response = self.client.post('/api/chat', json={'message': 'Find external evidence'})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['sources'], [{'title': 'Source', 'url': 'https://example.com'}])

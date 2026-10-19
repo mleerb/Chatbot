@@ -5,14 +5,15 @@ from docx import Document
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from app.sessions import sessions, sessions_lock
-from app.extract import file_context
-from app.file_types import TEXT_EXTENSIONS
+from app.services.sessions import Download, sessions, sessions_lock
+from app.services.extract import file_context
+from app.core.file_types import TEXT_EXTENSIONS
 
 
 class FileEdit(BaseModel):
     old_text: str = Field(description="Exact text to find in the uploaded file")
     new_text: str = Field(description="Replacement text")
+    file_id: str = Field(default="", description="ID of the uploaded file to edit; required when multiple files are uploaded")
 
 
 def replace_text(data: bytes, filename: str, old_text: str, new_text: str) -> bytes:
@@ -68,22 +69,28 @@ def replace_text(data: bytes, filename: str, old_text: str, new_text: str) -> by
 def create_edit_tool(token: str):
     @tool(
         args_schema=FileEdit,
-        description="Edit the uploaded UTF-8 text or Word .docx file by replacing one exact, unique passage. Saves an edited downloadable copy; never changes the original. Use only when the user requests an edit, and never for binary files or images.",
+        description="Edit an uploaded UTF-8 text or Word .docx file by ID, replacing one exact, unique passage. Retains every edited revision for download and never changes the original. Use only when the user requests an edit, never for binary files or images.",
     )
-    def edit_uploaded_file(old_text: str, new_text: str) -> str:
+    def edit_uploaded_file(old_text: str, new_text: str, file_id: str = "") -> str:
         with sessions_lock:
             session = sessions.get(token)
         if session is None:
             return "Session expired; no edit saved."
-        if session.file_bytes is None:
+        if not session.uploads:
             return "No uploaded file to edit."
+        if not file_id and len(session.uploads) > 1:
+            return "Choose the uploaded file_id to edit; multiple files are uploaded."
+        item = session.uploads.get(file_id) if file_id else session.latest_upload
+        if item is None:
+            return "Uploaded file not found; no edit saved."
         try:
-            edited = replace_text(session.edited_bytes if session.edited_bytes is not None else session.file_bytes,
-                                  session.filename, old_text, new_text)
+            edited = replace_text(item.edits[-1].data if item.edits else item.data,
+                                  item.filename, old_text, new_text)
         except ValueError as exc:
             return str(exc)
-        session.edited_bytes = edited
-        session.document, session.image_url, session.file_status = file_context(session.filename, edited)
-        return f"Edited copy ready for download: {session.filename}. The original is unchanged."
+        revision = Download(item.filename, edited)
+        item.edits.append(revision)
+        item.document, item.image_url, item.status = file_context(item.filename, edited)
+        return f"Edited copy ready for download: {item.filename} (file_id={item.id}, revision_id={revision.id}). The original is unchanged."
 
     return edit_uploaded_file

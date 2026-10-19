@@ -5,7 +5,7 @@ from pathlib import Path
 from docx import Document
 from PIL import Image, UnidentifiedImageError
 
-from app.file_types import IMAGE_EXTENSIONS, TEXT_EXTENSIONS
+from app.core.file_types import IMAGE_EXTENSIONS, TEXT_EXTENSIONS
 
 def extract_docx(data: bytes) -> str:
     document = Document(io.BytesIO(data))

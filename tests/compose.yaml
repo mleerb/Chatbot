@@ -1,0 +1,18 @@
+services:
+  frontend:
+    ports: !reset []
+  app:
+    volumes: !override
+      - type: bind
+        source: ./.env.example
+        target: /app/.env
+        read_only: true
+        bind:
+          create_host_path: false
+  db:
+    ports: !reset []
+
+volumes:
+  postgres_data: !override
+    name: "${COMPOSE_PROJECT_NAME}_postgres_data"
+    external: false

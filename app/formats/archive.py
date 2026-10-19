@@ -2,7 +2,7 @@ import io
 import zipfile
 from pathlib import Path
 
-from app.file_types import TEXT_EXTENSIONS
+from app.core.file_types import TEXT_EXTENSIONS
 from app.formats.blocks import structured_content
 
 
