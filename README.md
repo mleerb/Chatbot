@@ -1,6 +1,6 @@
 # AGENTslop
 
-Local Next.js + FastAPI chatbot with Deep Agents, PostgreSQL-backed users and chat history, browser-session uploads, downloadable generated documents, and optional Tavily web evidence.
+Local general-purpose AI agent chatbot built with Next.js, FastAPI and Deep Agents for questions, writing, brainstorming and planning. Includes PostgreSQL-backed users and chat history, optional browser-session file context, downloadable generated documents, and optional Tavily web evidence.
 
 The backend uses a layered FastAPI layout: `app/routers/` for HTTP endpoints, `app/schemas/` for API models, `app/services/` for workflows, `app/db/` for persistence, and `app/core/` for configuration and tracing. `app/main.py` assembles the app; `app/dependencies.py` provides browser sessions. See [architecture](docs/architecture.md) for the full map.
 
@@ -19,7 +19,7 @@ docker volume create chatbot-postgres-data
 docker compose up -d --build
 ```
 
-Open http://127.0.0.1:8000. Check status with `docker compose ps`, follow app logs with `docker compose logs -f app`, and stop with `docker compose down`. Compose uses the external `chatbot-postgres-data` volume; the create command above reuses it if it already exists. PostgreSQL initializes a database only when the volume is empty. The app mounts your local `.env` read-only; neither credentials nor user documents are included in the image. The volume configuration is included directly in `compose.yaml`; no override file is needed. Do not overwrite an existing `.env`. See [setup](docs/setup.md) for initial setup, existing data, and optional local development.
+Open http://127.0.0.1:8000 for the landing page, then choose **Open workspace** to enter the chatbot at `/chat`. Check status with `docker compose ps`, follow app logs with `docker compose logs -f app`, and stop with `docker compose down`. Compose uses the external `chatbot-postgres-data` volume; the create command above reuses it if it already exists. PostgreSQL initializes a database only when the volume is empty. The app mounts your local `.env` read-only; neither credentials nor user documents are included in the image. The volume configuration is included directly in `compose.yaml`; no override file is needed. Do not overwrite an existing `.env`. See [setup](docs/setup.md) for initial setup, existing data, and optional local development.
 
 Docker runs three services: Next.js frontend, FastAPI backend, and PostgreSQL. No host Python or Node.js is needed. Python dependencies are locked in `uv.lock`; frontend dependencies are locked in `frontend/package-lock.json`.
 

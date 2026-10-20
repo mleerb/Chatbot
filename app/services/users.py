@@ -2,7 +2,7 @@ import psycopg
 
 from app.core.errors import ServiceError
 from app.db import repository
-from app.services.context import MAX_HISTORY_MESSAGES
+from app.services.conversations import activate
 from app.services.sessions import ChatSession
 
 
@@ -28,8 +28,13 @@ def select_user(session: ChatSession, user_id: int):
         if session.user_id != user_id:
             session.clear_upload()
             session.generated.clear()
+        changed = session.user_id != user_id
         session.user_id = user_id
-        session.history = repository.messages(user_id, MAX_HISTORY_MESSAGES)
+        conversations = repository.conversations(user_id)
+        current = next((item for item in conversations if item["id"] == session.conversation_id), None)
+        if changed or current is None:
+            current = conversations[0] if conversations else repository.create_conversation(user_id)
+        activate(session, current)
         return user
 
 

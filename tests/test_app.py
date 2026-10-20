@@ -29,7 +29,8 @@ class AppTests(unittest.TestCase):
         self.assertEqual(set(schema["paths"]), {
             "/api/state", "/api/chat", "/api/document", "/api/document/download",
             "/api/document/edited", "/api/users", "/api/users/{user_id}/select",
-            "/api/users/{user_id}/messages", "/api/files/download",
+            "/api/users/{user_id}/messages", "/api/files/download", "/api/conversations",
+            "/api/conversations/{conversation_id}", "/api/conversations/{conversation_id}/select",
         })
         chat = schema["paths"]["/api/chat"]["post"]
         self.assertEqual(chat["responses"]["200"]["content"]["application/json"]["schema"],

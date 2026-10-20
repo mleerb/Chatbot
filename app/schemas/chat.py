@@ -3,6 +3,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.schemas.documents import DownloadInfo, UploadResponse
+from app.schemas.conversations import ConversationResponse
 
 
 class ChatRequest(BaseModel):
@@ -30,6 +31,8 @@ class ChatResponse(BaseModel):
 
 class StateResponse(BaseModel):
     user_id: int | None
+    conversation_id: int | None
+    conversations: list[ConversationResponse]
     messages: list[Message]
     uploads: list[UploadResponse]
     generated_files: list[DownloadInfo]

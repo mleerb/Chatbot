@@ -1,6 +1,5 @@
 import { useState, type FormEvent } from 'react';
 import type { User } from '../lib/api';
-import Icon from './icon';
 
 type Props = {
   users: User[];
@@ -16,7 +15,6 @@ export default function People({ users, selected, busy, onSelect, onCreate }: Pr
     event.preventDefault();
     if (await onCreate(name.trim())) setName('');
   }
-  const user = users.find(user => user.id === selected);
   return <section className="people" aria-label="Chat users">
     <label htmlFor="user-select">User</label>
     <select id="user-select" aria-label="Select user" value={selected || ''} disabled={busy}
@@ -33,11 +31,5 @@ export default function People({ users, selected, busy, onSelect, onCreate }: Pr
         <button className="primary-button" type="submit" disabled={busy || !name.trim()}>Add user</button>
       </form>
     </details>
-    <div className="sidebar-conversation">
-      <h2>Conversation</h2>
-      {user ? <div className="current-conversation" aria-current="page"><Icon name="chat" />
-        <span>{user.name}&apos;s chat</span><span className="current-dot" aria-hidden="true" />
-      </div> : <p>Select or add a user to open a conversation.</p>}
-    </div>
   </section>;
 }
