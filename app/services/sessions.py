@@ -44,6 +44,7 @@ class Upload:
 @dataclass
 class ChatSession:
     user_id: int | None = None
+    conversation_id: int | None = None
     history: list[dict] = field(default_factory=list)
     uploads: dict[str, Upload] = field(default_factory=dict)
     generated: dict[str, Download] = field(default_factory=dict)

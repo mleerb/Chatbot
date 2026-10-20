@@ -4,6 +4,7 @@ from app.core.errors import ServiceError
 from app.db import repository
 from app.services.agent import answer_question, make_agent
 from app.services.context import MAX_HISTORY_MESSAGES
+from app.services.conversations import activate, ensure_active
 from app.services.sessions import ChatSession
 
 logger = logging.getLogger(__name__)
@@ -11,9 +12,13 @@ logger = logging.getLogger(__name__)
 
 def state(session: ChatSession):
     with session.lock:
+        ensure_active(session)
         return {
             "user_id": session.user_id,
-            "messages": repository.messages(session.user_id) if session.user_id else [],
+            "conversation_id": session.conversation_id,
+            "conversations": repository.conversations(session.user_id) if session.user_id else [],
+            "messages": repository.messages(session.user_id, conversation_id=session.conversation_id)
+            if session.conversation_id else [],
             **session.file_state(),
         }
 
@@ -25,9 +30,12 @@ def reply(token: str, session: ChatSession, message: str):
     with session.lock:
         if session.user_id is None:
             raise ServiceError(400, "Select a user before chatting")
+        ensure_active(session)
+        if session.conversation_id is None:
+            activate(session, repository.create_conversation(session.user_id))
         sources = []
         try:
-            session.history = repository.messages(session.user_id, MAX_HISTORY_MESSAGES)
+            session.history = repository.messages(session.user_id, MAX_HISTORY_MESSAGES, session.conversation_id)
             answer = answer_question(
                 make_agent(token, question, sources), question, session.history, token,
                 uploads=list(session.uploads.values()),
@@ -43,7 +51,7 @@ def reply(token: str, session: ChatSession, message: str):
                 f"{title}: {url}" for title, url in links
             )
         try:
-            repository.save_turn(session.user_id, question, answer, citations)
+            repository.save_turn(session.user_id, question, answer, citations, session.conversation_id)
         except Exception as exc:
             logger.exception("Could not save chat turn")
             raise ServiceError(503, "Could not save conversation") from exc

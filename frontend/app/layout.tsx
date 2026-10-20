@@ -7,7 +7,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'AGENTslop',
-  description: 'A local document workbench powered by FastAPI and Deep Agents.',
+  description: 'A local AI agent chatbot for questions, ideas, writing, planning, and working with files.',
 };
 
 export default function Layout({ children }: { children: ReactNode }) {

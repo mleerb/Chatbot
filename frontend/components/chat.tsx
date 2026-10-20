@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { errorMessage, request, type Files, type Message, type Reply, type State, type User } from '../lib/api';
+import { errorMessage, request, type Files, type Message, type Reply, type State, type User, type Conversation } from '../lib/api';
 import Composer from './composer';
+import Brand from './brand';
+import Conversations from './conversations';
 import { FileShelf } from './files';
 import Icon from './icon';
 import Messages from './messages';
@@ -13,6 +15,8 @@ const emptyFiles: Files = { uploads: [], generated_files: [] };
 export default function Chat() {
   const [users, setUsers] = useState<User[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [active, setActive] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [files, setFiles] = useState<Files>(emptyFiles);
   const [busy, setBusy] = useState(true);
@@ -57,9 +61,7 @@ export default function Chat() {
     void (async () => {
       try {
         const state = await request<State>('/api/state');
-        setSelected(state.user_id);
-        setMessages(state.messages);
-        setFiles(state);
+        applyState(state);
         setUsers(await request<User[]>('/api/users'));
       } catch (error) { setError(errorMessage(error)); }
       finally { working.current = false; setBusy(false); }
@@ -77,8 +79,26 @@ export default function Chat() {
     working.current = false;
     setBusy(false);
   }
+  function applyState(state: State) {
+    setSelected(state.user_id);
+    setActive(state.conversation_id);
+    setConversations(state.conversations);
+    setMessages(state.messages);
+    setFiles(state);
+  }
   async function refreshFiles() {
-    setFiles(await request<State>('/api/state'));
+    applyState(await request<State>('/api/state'));
+  }
+  async function conversationAction(path: string, method: string, changes?: { title?: string; pinned?: boolean }): Promise<boolean> {
+    if (!start()) return false;
+    try {
+      await request(path, { method, ...(changes ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(changes) } : {}) });
+      await refreshFiles();
+      setWarning('');
+      if (method === 'POST') closeSidebar();
+      return true;
+    } catch (error) { setError(errorMessage(error)); return false; }
+    finally { finish(); }
   }
   async function select(id: number) {
     await request(`/api/users/${id}/select`, { method: 'POST' });
@@ -87,9 +107,7 @@ export default function Chat() {
     setMessages([]);
     setFiles(emptyFiles);
     setWarning('');
-    const state = await request<State>('/api/state');
-    setMessages(state.messages);
-    setFiles(state);
+    await refreshFiles();
   }
   async function selectUser(id: number) {
     if (!start()) return;
@@ -157,14 +175,19 @@ export default function Chat() {
     try { localStorage.setItem('chat-theme', next); } catch {}
   }
 
-  const user = users.find(user => user.id === selected);
+  const activeConversation = conversations.find(chat => chat.id === active);
 
   return <main className="app" data-app data-theme={theme}>
     <dialog ref={sidebar} id="sidebar" className="sidebar" aria-label="Workspace sidebar" onClose={() => setSidebarOpen(false)}>
-      <div className="sidebar-brand"><span className="brand-mark" aria-hidden="true">a</span><span>AGENTslop</span>
+      <div className="sidebar-brand"><span className="brand-mark" aria-hidden="true">a</span><Brand />
         <button type="button" className="icon-button close-sidebar" aria-label="Close sidebar" onClick={closeSidebar}><Icon name="close" /></button>
       </div>
       <People users={users} selected={selected} busy={busy} onSelect={selectUser} onCreate={createUser} />
+      {selected && <Conversations key={selected} conversations={conversations} selected={active} busy={busy}
+        onCreate={async () => { await conversationAction('/api/conversations', 'POST'); }}
+        onSelect={async id => { await conversationAction(`/api/conversations/${id}/select`, 'POST'); }}
+        onUpdate={(id, changes) => conversationAction(`/api/conversations/${id}`, 'PATCH', changes)}
+        onDelete={id => conversationAction(`/api/conversations/${id}`, 'DELETE')} />}
       <div className="sidebar-footer">
         <button className="theme-toggle" type="button" onClick={toggleTheme}
           aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}>
@@ -177,7 +200,7 @@ export default function Chat() {
       <header className="chat-header">
         <button type="button" className="icon-button open-sidebar" aria-label="Open sidebar" aria-controls="sidebar" aria-expanded={sidebarOpen}
           onClick={() => { sidebar.current?.showModal(); setSidebarOpen(true); }}><Icon name="menu" /></button>
-        <div><h2>{user ? `${user.name}'s conversation` : 'Conversation'}</h2><p>Ask, review and work with your files.</p></div>
+        <div><h2>{activeConversation?.title ?? 'Conversation'}</h2><p>Ask questions, explore ideas, and get things done.</p></div>
         {!!files.uploads.length && <span className="file-count"><Icon name="file" />{files.uploads.length} attached</span>}
       </header>
       <div ref={conversation} className="conversation-scroll">
