@@ -9,3 +9,5 @@
 !components/**
 !lib/
 !lib/**
+!public/
+!public/**

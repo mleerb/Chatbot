@@ -1,5 +1,6 @@
 from app.core.errors import ServiceError
 from app.db import repository
+from app.services import guest
 from app.services.context import MAX_HISTORY_MESSAGES
 from app.services.sessions import ChatSession
 
@@ -21,16 +22,23 @@ def activate(session: ChatSession, conversation):
 
 def list_conversations(session: ChatSession):
     with session.lock:
+        if session.guest:
+            item = guest.conversation(session)
+            return [item] if item else []
         return repository.conversations(require_user(session))
 
 
 def create(session: ChatSession):
     with session.lock:
+        if session.guest:
+            return guest.create(session)
         return activate(session, repository.create_conversation(require_user(session)))
 
 
 def select(session: ChatSession, conversation_id: int):
     with session.lock:
+        if session.guest:
+            return guest.require(session, conversation_id)
         conversation = repository.get_conversation(require_user(session), conversation_id)
         if conversation is None:
             raise ServiceError(404, "Conversation not found")
@@ -43,6 +51,13 @@ def update(session: ChatSession, conversation_id: int, title: str | None, pinned
         if not title:
             raise ServiceError(422, "Title cannot be blank")
     with session.lock:
+        if session.guest:
+            guest.require(session, conversation_id)
+            if pinned:
+                raise ServiceError(403, "Log in to pin saved conversations")
+            if title is not None:
+                session.guest_conversation["title"] = title
+            return guest.conversation(session)
         conversation = repository.update_conversation(require_user(session), conversation_id, title, pinned)
         if conversation is None:
             raise ServiceError(404, "Conversation not found")
@@ -51,6 +66,10 @@ def update(session: ChatSession, conversation_id: int, title: str | None, pinned
 
 def remove(session: ChatSession, conversation_id: int):
     with session.lock:
+        if session.guest:
+            guest.require(session, conversation_id)
+            guest.clear(session)
+            return {"ok": True}
         if repository.delete_conversation(require_user(session), conversation_id) is None:
             raise ServiceError(404, "Conversation not found")
         if session.conversation_id == conversation_id:
@@ -65,6 +84,8 @@ def remove(session: ChatSession, conversation_id: int):
 
 
 def ensure_active(session: ChatSession):
+    if session.guest:
+        return
     if session.conversation_id is not None and repository.get_conversation(
         session.user_id, session.conversation_id
     ) is None:

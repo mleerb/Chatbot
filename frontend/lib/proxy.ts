@@ -14,6 +14,7 @@ export async function proxy(request: Request): Promise<Response> {
   target.search = incoming.search;
   const headers = cleanHeaders(request.headers);
   headers.set('accept-encoding', 'identity');
+  headers.set('x-forwarded-host', request.headers.get('host') || incoming.host);
   const init: RequestInit & { duplex: 'half' } = {
     method: request.method,
     headers,

@@ -19,6 +19,7 @@ dependencies = [
     "python-multipart>=0.0.9,<1",
     "python-pptx>=1,<2",
     "reportlab>=4,<5",
+    "sqlalchemy>=2.0,<3",
     "uvicorn>=0.30,<1",
 ]
 

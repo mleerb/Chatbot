@@ -1,5 +1,6 @@
 import type { Files, Upload } from '../lib/api';
 import Icon from './icon';
+import { guestDownload } from '../lib/guest';
 
 export function AttachedFiles({ uploads, disabled, onRemove }: {
   uploads: Upload[];
@@ -35,11 +36,11 @@ export function FileShelf({ files, busy, onRemove }: {
               <div><h3>{file.filename}</h3><p>{file.status}</p></div>
             </div>
             <div className="file-actions">
-              <a href={`/api/document/download?${query}`} download>Download original</a>
+              <a href={`/api/document/download?${query}`} download={file.filename} onClick={guestDownload}>Download original</a>
               <button type="button" className="text-button" disabled={busy} onClick={() => void onRemove(file.id)}>Remove file</button>
             </div>
             {!!file.edits.length && <div className="revisions" aria-label={`Edited versions of ${file.filename}`}>
-              {file.edits.map((edit, index) => <a key={edit.id} className="revision" download
+              {file.edits.map((edit, index) => <a key={edit.id} className="revision" download={edit.filename} onClick={guestDownload}
                 href={`/api/document/edited?${query}&revision_id=${encodeURIComponent(edit.id)}`}>
                 <Icon name="download" /> Edited v{index + 1}
               </a>)}
@@ -50,7 +51,7 @@ export function FileShelf({ files, busy, onRemove }: {
     </>}
     {!!files.generated_files.length && <section className="generated" aria-label="Generated files">
       <h2>Created files</h2>
-      {files.generated_files.map(file => <a key={file.id} className="generated-file" download
+      {files.generated_files.map(file => <a key={file.id} className="generated-file" download={file.filename} onClick={guestDownload}
         href={`/api/files/download?file_id=${encodeURIComponent(file.id)}`}>
         <Icon name="file" /><span>{file.filename}</span><Icon name="download" /><span className="sr-only">Download</span>
       </a>)}

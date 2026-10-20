@@ -30,7 +30,7 @@ class WebTests(unittest.TestCase):
 
     def test_upload_chat_and_remove(self):
         self.assertEqual(self.client.get('/health').json(), {'status': 'ok'})
-        self.assertEqual(app.title, 'AGENTslop')
+        self.assertEqual(app.title, 'Aster')
         with patch('app.services.chat.make_agent', return_value=object()), patch(
             'app.services.chat.answer_question', return_value='Found it'
         ) as answer:
@@ -63,6 +63,7 @@ class WebTests(unittest.TestCase):
 
     def test_sessions_are_isolated(self):
         with TestClient(app) as another:
+            another.post('/api/auth/login', json={'email': 'tester@example.com', 'password': 'test-password-123'})
             self.client.post('/api/document', files={'file': ('one.docx', word_file('Only A'))})
             self.assertEqual(another.get('/api/state').json()['uploads'], [])
             self.assertEqual(self.client.get('/api/state').json()['uploads'][0]['filename'], 'one.docx')
@@ -114,7 +115,7 @@ class WebTests(unittest.TestCase):
     def test_replacement_and_session_isolation_of_downloads(self):
         self.assertEqual(self.client.get('/api/document/download').status_code, 404)
         with TestClient(app) as another:
-            another.post('/api/users/1/select')
+            another.post('/api/auth/login', json={'email': 'tester@example.com', 'password': 'test-password-123'})
             self.client.post('/api/document', files={'file': ('a.txt', b'first')})
             self.assertEqual(another.get('/api/document/download').status_code, 404)
             another.post('/api/document', files={'file': ('b.txt', b'other')})

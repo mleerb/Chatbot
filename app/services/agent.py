@@ -1,4 +1,5 @@
 import os
+from contextlib import nullcontext
 from deepagents import create_deep_agent
 
 from app.services.context import conversation_messages, response_text
@@ -18,14 +19,15 @@ def make_agent(session_id: str | None = None, question: str = "", sources: list[
 
 
 def answer_question(agent, question: str, history: list[dict], session_id: str,
-                    uploads: list[Upload] | None = None) -> str:
+                    uploads: list[Upload] | None = None, trace: bool = True) -> str:
     messages = conversation_messages(question, history, uploads)
-    with trace_chat_turn(
+    observation = trace_chat_turn(
         session_id=session_id,
         question=question,
         model=os.getenv("CHAT_MODEL", "openai:gpt-4o-mini").strip(),
         has_document=bool(uploads),
-    ) as (handler, span):
+    ) if trace else nullcontext((None, None))
+    with observation as (handler, span):
         config = {"callbacks": [handler]} if handler else None
         result = agent.invoke({"messages": messages}, config=config)
         answer = response_text(result["messages"][-1].content)

@@ -7,20 +7,24 @@ from app.core import config
 from app.core.errors import ServiceError
 from app.core.trace import flush_traces
 from app.db import repository
+from app.db.connection import dispose_engine
 from app.routers import router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    repository.initialize()
     try:
+        repository.initialize()
         yield
     finally:
-        flush_traces()
+        try:
+            flush_traces()
+        finally:
+            dispose_engine()
 
 
 def create_app() -> FastAPI:
-    application = FastAPI(title="AGENTslop", lifespan=lifespan)
+    application = FastAPI(title="Aster", lifespan=lifespan)
     application.include_router(router)
 
     @application.exception_handler(ServiceError)

@@ -1,32 +1,135 @@
-# AGENTslop
+# Aster
 
-Local general-purpose AI agent chatbot built with Next.js, FastAPI and Deep Agents for questions, writing, brainstorming and planning. Includes PostgreSQL-backed users and chat history, optional browser-session file context, downloadable generated documents, and optional Tavily web evidence.
+A local-first AI chat workspace built with **Next.js, FastAPI, Deep Agents and PostgreSQL**. Ask questions, develop ideas, work with uploaded documents, and download generated files from a light/dark web interface.
 
-The backend uses a layered FastAPI layout: `app/routers/` for HTTP endpoints, `app/schemas/` for API models, `app/services/` for workflows, `app/db/` for persistence, and `app/core/` for configuration and tracing. `app/main.py` assembles the app; `app/dependencies.py` provides browser sessions. See [architecture](docs/architecture.md) for the full map.
+> Designed for local use or access through SSH port forwarding. Authentication is included, but this demo is **not hardened for public deployment**.
 
-## Run with Docker Desktop
+## Features
 
-On a new machine, start Docker Desktop with Linux containers. From the project root:
+- **Accounts and saved conversations:** email/password registration, Argon2id password hashing, and account-scoped history with rename, pin and delete actions.
+- **Guest chat:** no registration required. Conversations and files remain in server memory with no idle timeout; refresh preserves the guest session in the same tab.
+- **File context:** read DOCX, UTF-8 text and images with a vision-capable model. Upload multiple files and manage them independently.
+- **Edits and downloads:** keep uploaded originals, download text/DOCX revisions, and generate text, DOCX, PDF, XLSX, PPTX or ZIP files.
+- **Optional web search:** Tavily evidence links alongside answers.
+- **Optional observability:** Langfuse tracing for account chats, with content redacted by default. Guest turns bypass the application's tracing integration.
+- **Responsive interface:** Aster landing page and chat workspace, light/dark themes, and locally served fonts with no external CDN dependency.
 
-```powershell
-Copy-Item .env.example .env
+## Quick start
+
+### Requirements
+
+- Git and Docker with Docker Compose v2.24.4 or newer.
+- An OpenAI API key or credentials for a compatible provider.
+- Available local port **18080**.
+
+Docker supplies Node.js, Python and PostgreSQL; host installations are not required to run the app.
+
+### Fresh installation
+
+**For a new installation only.** If you already have configuration or database data, keep it and follow the [setup guide](docs/setup.md) instead of replacing files or credentials.
+
+```bash
+git clone https://github.com/mleerb/Chatbot.git
+cd Chatbot
+cp .env.example .env
+cp .docker.env.example .docker.env
+chmod 600 .env .docker.env
 ```
 
-Edit `.env`: replace `POSTGRES_PASSWORD` with a long random password and set `OPENAI_API_KEY`. Keep `DATABASE_URL` empty for a new Docker database. Then run:
+Edit the private configuration files before starting:
 
-```powershell
-docker volume create chatbot-postgres-data
-docker compose up -d --build
+| File | Required configuration |
+| --- | --- |
+| `.env` | Set `OPENAI_API_KEY`. Optionally change `CHAT_MODEL` and `OPENAI_BASE_URL`. |
+| `.docker.env` | Replace `POSTGRES_PASSWORD` with a long, random password. This file overrides the example database password in `.env`. |
+
+Never commit either private file. The example files contain placeholders only.
+
+Create the external database volume and start the stack:
+
+```bash
+docker volume create chatbot_postgres_data
+docker compose up -d --build --wait
+docker compose ps
 ```
 
-Open http://127.0.0.1:8000 for the landing page, then choose **Open workspace** to enter the chatbot at `/chat`. Check status with `docker compose ps`, follow app logs with `docker compose logs -f app`, and stop with `docker compose down`. Compose uses the external `chatbot-postgres-data` volume; the create command above reuses it if it already exists. PostgreSQL initializes a database only when the volume is empty. The app mounts your local `.env` read-only; neither credentials nor user documents are included in the image. The volume configuration is included directly in `compose.yaml`; no override file is needed. Do not overwrite an existing `.env`. See [setup](docs/setup.md) for initial setup, existing data, and optional local development.
+Open **http://127.0.0.1:18080/** and select **Start a conversation**. Create an account to save history, or choose **Continue as guest**.
 
-Docker runs three services: Next.js frontend, FastAPI backend, and PostgreSQL. No host Python or Node.js is needed. Python dependencies are locked in `uv.lock`; frontend dependencies are locked in `frontend/package-lock.json`.
+The stack uses **PostgreSQL 17**. An existing volume must have compatible data and matching credentials; changing an environment variable does not change an existing database password. Do not delete the volume or change the PostgreSQL major version to resolve startup errors.
 
-The Next.js App Router frontend lives in `frontend/app/`, with React components in `frontend/components/`. The English UI uses a purple light/dark palette, a user sidebar and in-chat files, with active attachment chips above the composer. Its `/api/*` proxy streams uploads/downloads to FastAPI and preserves browser-session cookies. The public local address remains http://127.0.0.1:8000; FastAPI has no published Docker port. See [setup](docs/setup.md) for frontend development and validation. Do not expose this unauthenticated demo publicly.
+### Access from another computer
 
-## Read only what you need
+When the app runs on a Linux server, use VS Code Remote SSH port forwarding for server port **18080**, then open the forwarded address shown in the Ports panel. The local port may differ from the server port.
 
-- [Setup and validation](docs/setup.md): PostgreSQL, model/Tavily configuration, tests, smoke check.
-- [File behavior](docs/files.md): uploads, downloads, generation, and practical limits.
-- [Architecture](docs/architecture.md): module map, prompts, sessions, and tracing.
+For a manual SSH alternative, see [remote access](docs/setup.md#open-from-your-computer-through-ssh). Keep the server bound to loopback; do not expose the app publicly.
+
+## How it works
+
+```text
+Browser → Next.js frontend and API proxy → FastAPI / Deep Agents
+                                               ├─ Model provider
+                                               ├─ PostgreSQL: account history
+                                               └─ Server memory: sessions and files
+```
+
+Only the frontend publishes a host port, bound to `127.0.0.1:18080`. FastAPI and PostgreSQL stay inside the Docker network. PostgreSQL access uses SQLAlchemy ORM over Psycopg.
+
+### Accounts, guests and privacy
+
+| | Account | Guest |
+| --- | --- | --- |
+| Chat history | Saved in PostgreSQL | Server memory only; never imported into accounts |
+| Access lifetime | 12-hour idle session; log in again after restart | No idle timeout; normally ends when the chat tab closes |
+| Uploaded/generated files | Temporary, not permanently attached to saved messages | Temporary and isolated to the guest tab |
+
+Closing a guest tab triggers **best-effort** cleanup with a 15-second refresh grace. Browser crashes, restored/duplicated tabs or blocked close requests can delay cleanup. Backend restarts clear all in-memory sessions and files, but not saved account history.
+
+The model provider receives the context needed to answer. Optional search and tracing have their own data-handling policies; server-memory-only guest storage is not a guarantee of zero retention by external providers.
+
+## Configuration
+
+See [`.env.example`](.env.example) and [`.docker.env.example`](.docker.env.example) for the available settings.
+
+- **Model:** `OPENAI_API_KEY`, `CHAT_MODEL` (default `openai:gpt-4o-mini`), and optional `OPENAI_BASE_URL`.
+- **Search:** optional `TAVILY_API_KEY`.
+- **Tracing:** optional `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` and `LANGFUSE_BASE_URL`. Keep `LANGFUSE_TRACE_CONTENT=false` to redact exported content.
+
+Provider requests can incur charges. Use an image-capable model for image uploads. See the [setup guide](docs/setup.md#model-and-optional-services) for details.
+
+## Development and validation
+
+Run backend tests in a temporary app container using the built image:
+
+```bash
+docker compose run --rm --no-deps --volume "$PWD/tests:/app/tests:ro" app python -m unittest discover -s tests
+```
+
+Optional PostgreSQL integration tests require a **separate disposable database**. Never point them at your saved application data.
+
+For frontend checks, use Node.js 24:
+
+```bash
+npm --prefix frontend ci
+npm --prefix frontend run build
+npm --prefix frontend run typecheck
+npm --prefix frontend test
+npm --prefix frontend exec -- playwright install chromium
+npm --prefix frontend run test:e2e
+```
+
+E2E tests use a synthetic backend, not real provider credentials. To check the running deployment's landing page, guest entry and refresh without calling the model, run `npm --prefix frontend run test:live`.
+
+## Limitations
+
+- Uploaded PDF, XLSX and PPTX contents are **not extracted**, although these formats can be generated for download.
+- Context includes extracted file contents and the last 12 messages; there is no RAG or chunking. Large inputs can exceed model limits or server memory.
+- File storage and login sessions are in memory. Run a single backend worker; restarting loses temporary state.
+- No email verification, password recovery, OAuth or durable login sessions.
+- Schema initialization is not a general migration system; future schema changes need explicit migrations.
+- AI answers and generated files require review before use.
+
+## Documentation
+
+- [Setup and validation](docs/setup.md): configuration, remote access, backups, commands and testing.
+- [File behavior](docs/files.md): supported formats, editing, downloads and storage limits.
+- [Architecture](docs/architecture.md): module map, sessions, prompts and integrations.

@@ -2,14 +2,11 @@ services:
   frontend:
     ports: !reset []
   app:
-    volumes: !override
-      - type: bind
-        source: ./.env.example
-        target: /app/.env
-        read_only: true
-        bind:
-          create_host_path: false
+    env_file: !override
+      - ./.env.example
   db:
+    env_file: !override
+      - ./.env.example
     ports: !reset []
 
 volumes:

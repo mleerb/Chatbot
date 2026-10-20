@@ -3,8 +3,8 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from app.services.sessions import sessions
 from app.main import app
+from app.services.sessions import sessions
 from tests.fake_database import mock_database
 
 
@@ -18,31 +18,25 @@ class UserTests(unittest.TestCase):
         self.client.close()
         sessions.clear()
 
-    def test_users_history_survives_session_reset_and_switching(self):
+    def test_history_survives_logout_and_cannot_be_selected_by_another_account(self):
         self.assertEqual(self.client.get('/api/users').json(), [{'id': 1, 'name': 'Tester'}])
-        self.assertEqual(self.client.post('/api/users', json={'name': '  '}).status_code, 422)
+        self.assertEqual(self.client.post('/api/users', json={'name': 'Other'}).status_code, 403)
         with patch('app.services.chat.make_agent', return_value=object()), patch(
             'app.services.chat.answer_question', return_value='First answer'
-        ) as answer:
+        ):
             self.assertEqual(self.client.post('/api/chat', json={'message': 'First question'}).status_code, 200)
-            second = self.client.post('/api/users', json={'name': 'Second'}).json()
-            self.assertEqual(second['id'], 2)
-            self.client.post('/api/document', files={'file': ('private.md', b'private')})
-            self.client.post('/api/users/2/select')
-            self.assertEqual(self.client.get('/api/state').json()['uploads'], [])
-            self.assertEqual(self.client.get('/api/state').json()['messages'], [])
-            self.assertEqual(self.client.get('/api/users/1/messages').status_code, 403)
-            self.client.post('/api/users/1/select')
-            self.assertEqual(self.client.get('/api/users/1/messages').json()[0]['content'], 'First question')
-            self.assertEqual(self.client.get('/api/state').json()['uploads'], [])
-            self.assertEqual(self.client.post('/api/chat', json={'message': 'Follow up'}).status_code, 200)
-            self.assertEqual(answer.call_args.args[2][0]['content'], 'First question')
-        sessions.clear()
-        self.client.cookies.clear()
-        self.assertEqual(self.client.post('/api/chat', json={'message': 'No user'}).status_code, 400)
-        self.assertEqual(self.client.post('/api/users/999/select').status_code, 404)
-        self.client.post('/api/users/1/select')
-        self.assertEqual(len(self.client.get('/api/users/1/messages').json()), 4)
+        self.client.post('/api/document', files={'file': ('private.md', b'private')})
+        self.client.post('/api/auth/logout')
+        self.assertEqual(self.client.get('/api/state').status_code, 401)
+        self.client.post('/api/auth/register', json={
+            'name': 'Second', 'email': 'second@example.com', 'password': 'test-password-123'})
+        self.assertEqual(self.client.get('/api/users').json(), [{'id': 2, 'name': 'Second'}])
+        self.assertEqual(self.client.post('/api/users/1/select').status_code, 403)
+        self.assertEqual(self.client.get('/api/users/1/messages').status_code, 403)
+        self.assertEqual(self.client.get('/api/state').json()['messages'], [])
+        self.client.post('/api/auth/login', json={'email': 'tester@example.com', 'password': 'test-password-123'})
+        self.assertEqual(self.client.get('/api/state').json()['uploads'], [])
+        self.assertEqual(self.client.get('/api/users/1/messages').json()[0]['content'], 'First question')
 
     def test_save_failure_does_not_report_success(self):
         with patch('app.services.chat.make_agent', return_value=object()), patch(
@@ -50,7 +44,3 @@ class UserTests(unittest.TestCase):
         ), patch('app.db.repository.save_turn', side_effect=RuntimeError('unavailable')):
             self.assertEqual(self.client.post('/api/chat', json={'message': 'Question'}).status_code, 503)
         self.assertEqual(self.client.get('/api/state').json()['messages'], [])
-
-
-if __name__ == '__main__':
-    unittest.main()

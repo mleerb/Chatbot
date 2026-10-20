@@ -46,6 +46,7 @@ class GeneratedFileTests(unittest.TestCase):
         self.assertEqual(download.headers['x-content-type-options'], 'nosniff')
         self.assertEqual(self.client.get('/api/state').json()['generated_files'][0]['filename'], 'notes.md')
         with TestClient(app) as other:
+            other.post('/api/auth/login', json={'email': 'tester@example.com', 'password': 'test-password-123'})
             self.assertEqual(other.get('/api/files/download').status_code, 404)
 
     def test_invalid_extensions_paths_and_large_outputs(self):

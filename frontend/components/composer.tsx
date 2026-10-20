@@ -35,7 +35,7 @@ export default function Composer({ disabled, selected, uploads, onSend, onUpload
     <form className="composer" onSubmit={submit}>
       <AttachedFiles uploads={uploads} disabled={disabled} onRemove={onRemove} />
       <label htmlFor="message" className="sr-only">Your message</label>
-      <textarea ref={input} id="message" name="message" placeholder={selected ? 'Message AGENTslop…' : 'Select a user to start chatting'}
+      <textarea ref={input} id="message" name="message" placeholder={selected ? 'Message Aster…' : 'Log in to start chatting'}
         rows={2} maxLength={10000} required disabled={disabled} value={message} onKeyDown={keyDown}
         onChange={event => {
           setMessage(event.target.value);

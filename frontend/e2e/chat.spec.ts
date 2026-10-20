@@ -1,11 +1,18 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+async function login(page: Page) {
+  await page.getByLabel('Email', { exact: true }).fill('tester@example.com');
+  await page.getByLabel('Password', { exact: true }).fill('test-password-123');
+  await page.getByRole('button', { name: 'Log in', exact: true }).click();
+  await expect(page.getByLabel('Your message')).toBeVisible();
+}
 
 test('users, multi-upload, revisions, downloads, theme and session isolation', async ({ page, browser }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('/chat');
-  await expect(page).toHaveTitle('AGENTslop');
-  await page.getByLabel('Select user').selectOption('1');
+  await expect(page).toHaveTitle('Aster');
+  await login(page);
   await expect(page.getByRole('button', { name: 'Attach files' })).toBeEnabled();
   await page.getByLabel('Choose files').setInputFiles([
     { name: 'note.txt', mimeType: 'text/plain', buffer: Buffer.from('old') },
@@ -16,7 +23,7 @@ test('users, multi-upload, revisions, downloads, theme and session isolation', a
   await expect(page.locator('.sidebar .file-item')).toHaveCount(0);
   await page.reload();
   await expect(page.locator('.file-item')).toHaveCount(2);
-  await expect(page.getByLabel('Select user')).toHaveValue('1');
+  await expect(page.locator('.account-info')).toContainText('Tester');
   for (let version = 1; version <= 2; version++) {
     await page.getByLabel('Your message').fill('Edit note.txt');
     await page.getByRole('button', { name: 'Send', exact: false }).click();
@@ -39,18 +46,20 @@ test('users, multi-upload, revisions, downloads, theme and session isolation', a
   const other = await browser.newContext();
   const otherPage = await other.newPage();
   await otherPage.goto('/chat');
-  await expect(otherPage.getByLabel('Select user')).toHaveValue('');
+  await expect(otherPage.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
   await expect(otherPage.locator('.file-item')).toHaveCount(0);
   await other.close();
   await page.locator('.file-item').first().getByRole('button', { name: 'Remove file', exact: true }).click();
   await expect(page.locator('.file-item')).toHaveCount(1);
-  await page.getByLabel('Select user').selectOption('2');
+  await page.getByRole('button', { name: 'Log out', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
+  await page.getByRole('button', { name: 'New here? Create an account' }).click();
+  await page.getByLabel('Your name').fill('New tester');
+  await page.getByLabel('Email', { exact: true }).fill(`new-${Date.now()}@example.com`);
+  await page.getByLabel('Password', { exact: true }).fill('test-password-123');
+  await page.getByRole('button', { name: 'Create account', exact: true }).click();
+  await expect(page.locator('.account-info')).toContainText('New tester');
   await expect(page.locator('.file-item')).toHaveCount(0);
-  await expect(page.getByLabel('Generated files').getByRole('link')).toHaveCount(0);
-  await page.locator('.add-user summary').click();
-  await page.getByLabel('New user name').fill('New tester');
-  await page.getByRole('button', { name: 'Add user' }).click();
-  await expect(page.getByLabel('Select user')).toHaveValue('3');
   await page.screenshot({ path: 'test-results/desktop-dark.png', fullPage: true, animations: 'disabled' });
   await page.getByRole('button', { name: 'Switch to light theme' }).click();
   await page.screenshot({ path: 'test-results/desktop-light.png', fullPage: true, animations: 'disabled' });
@@ -59,7 +68,7 @@ test('users, multi-upload, revisions, downloads, theme and session isolation', a
 
 test('chat errors keep attachments and allow retry', async ({ page }) => {
   await page.goto('/chat');
-  await page.getByLabel('Select user').selectOption('1');
+  await login(page);
   await expect(page.getByRole('button', { name: 'Attach files' })).toBeEnabled();
   await page.getByLabel('Choose files').setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('notes') });
   await expect(page.locator('.file-item')).toHaveCount(1);
@@ -77,7 +86,7 @@ test('chat errors keep attachments and allow retry', async ({ page }) => {
 
 test('conversation rename, pin, switch, delete confirmation and persistence', async ({ page }) => {
   await page.goto('/chat');
-  await page.getByLabel('Select user').selectOption('1');
+  await login(page);
   await expect(page.getByRole('button', { name: '+ New conversation', exact: true })).toBeEnabled();
   const count = await page.locator('.conversation-item').count();
   await page.getByRole('button', { name: '+ New conversation', exact: true }).click();
@@ -136,11 +145,10 @@ test('conversation rename, pin, switch, delete confirmation and persistence', as
 test('mobile layout keeps composer reachable', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/chat');
-  await page.getByRole('button', { name: 'Open sidebar' }).click();
-  await page.getByLabel('Select user').selectOption('1');
+  await login(page);
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await expect(page.getByLabel('Your message')).toBeInViewport();
-  await expect(page.locator('.empty-brand .wordmark')).toHaveText('AGENTslop.');
+  await expect(page.locator('.empty-brand .wordmark')).toHaveText('Aster');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole('button', { name: 'Open sidebar' }).click();
   const current = page.locator('.conversation-item[data-selected="true"]');

@@ -7,6 +7,18 @@ class FakeDatabase:
         self.turns = {}
         self.chats = {}
         self.next_chat = 1
+        self.accounts = {}
+
+    def create_account(self, email, name, password_hash):
+        if email in self.accounts:
+            from sqlalchemy.exc import IntegrityError
+            raise IntegrityError("insert", {}, Exception("duplicate"))
+        user = self.create_user(name)
+        self.accounts[email] = {**user, "email": email, "password_hash": password_hash}
+        return {**user, "email": email}
+
+    def account_by_email(self, email):
+        return self.accounts.get(email)
 
     def users(self):
         return list(self.people.values())
@@ -67,12 +79,15 @@ class FakeDatabase:
 def mock_database(test):
     database = FakeDatabase()
     patches = [patch(f"app.db.repository.{name}", getattr(database, name)) for name in
-               ("users", "create_user", "get_user", "messages", "save_turn", "conversations",
+               ("create_account", "account_by_email", "users", "create_user", "get_user", "messages", "save_turn", "conversations",
                 "create_conversation", "get_conversation", "update_conversation", "delete_conversation")]
     patches.append(patch("app.db.repository.initialize"))
     for item in patches:
         item.start()
         test.addCleanup(item.stop)
-    test.client.post('/api/users', json={'name': 'Tester'})
+    from app.services.auth import attempts
+    attempts.clear()
+    test.client.post('/api/auth/register', json={
+        'name': 'Tester', 'email': 'tester@example.com', 'password': 'test-password-123'})
     test.client.post('/api/users/1/select')
     return database

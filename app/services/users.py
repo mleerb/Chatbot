@@ -1,23 +1,7 @@
-import psycopg
-
 from app.core.errors import ServiceError
 from app.db import repository
 from app.services.conversations import activate
 from app.services.sessions import ChatSession
-
-
-def list_users():
-    return repository.users()
-
-
-def create_user(name: str):
-    name = name.strip()
-    if not name:
-        raise ServiceError(422, "Name cannot be blank")
-    try:
-        return repository.create_user(name)
-    except psycopg.errors.UniqueViolation as exc:
-        raise ServiceError(409, "User name already exists") from exc
 
 
 def select_user(session: ChatSession, user_id: int):
@@ -25,10 +9,10 @@ def select_user(session: ChatSession, user_id: int):
         user = repository.get_user(user_id)
         if user is None:
             raise ServiceError(404, "User not found")
-        if session.user_id != user_id:
+        changed = session.user_id != user_id
+        if changed:
             session.clear_upload()
             session.generated.clear()
-        changed = session.user_id != user_id
         session.user_id = user_id
         conversations = repository.conversations(user_id)
         current = next((item for item in conversations if item["id"] == session.conversation_id), None)

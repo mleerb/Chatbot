@@ -1,9 +1,11 @@
 import os
 from contextlib import contextmanager
+from functools import lru_cache
 
 import psycopg
 from psycopg.conninfo import make_conninfo
-from psycopg.rows import dict_row
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 
 
 def database_url():
@@ -27,7 +29,25 @@ def database_url():
     return make_conninfo(url, **overrides) if overrides else url
 
 
+@lru_cache(maxsize=1)
+def get_engine():
+    config = database_url()
+    return create_engine(
+        "postgresql+psycopg://",
+        creator=lambda: psycopg.connect(config, connect_timeout=5),
+        pool_pre_ping=True,
+        hide_parameters=True,
+    )
+
+
+def dispose_engine():
+    if get_engine.cache_info().currsize:
+        get_engine().dispose()
+        get_engine.cache_clear()
+
+
 @contextmanager
-def connection():
-    with psycopg.connect(database_url(), row_factory=dict_row, connect_timeout=5) as conn:
-        yield conn
+def session():
+    with Session(get_engine()) as database:
+        with database.begin():
+            yield database

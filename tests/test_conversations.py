@@ -57,6 +57,7 @@ class ConversationTests(unittest.TestCase):
         self.assertEqual([item['id'] for item in self.client.get('/api/conversations').json()], [first, second])
         sessions.clear()
         self.client.cookies.clear()
+        self.client.post('/api/auth/login', json={'email': 'tester@example.com', 'password': 'test-password-123'})
         self.client.post('/api/users/1/select')
         state = self.client.get('/api/state').json()
         self.assertEqual(state['conversation_id'], first)
@@ -99,8 +100,7 @@ class ConversationTests(unittest.TestCase):
         first = self.client.get('/api/state').json()['conversation_id']
         for payload in ({'title': ''}, {'title': '   '}, {'title': 'x' * 101}, {'pinned': 'invalid'}):
             self.assertEqual(self.client.patch(f'/api/conversations/{first}', json=payload).status_code, 422)
-        self.client.post('/api/users', json={'name': 'Other'})
-        self.client.post('/api/users/2/select')
+        self.client.post('/api/auth/register', json={'name': 'Other', 'email': 'other@example.com', 'password': 'test-password-123'})
         self.assertEqual(self.client.post(f'/api/conversations/{first}/select').status_code, 404)
         self.assertEqual(self.client.patch(f'/api/conversations/{first}', json={'title': 'No'}).status_code, 404)
         self.assertEqual(self.client.delete(f'/api/conversations/{first}').status_code, 404)
@@ -112,14 +112,14 @@ class ConversationTests(unittest.TestCase):
             ('PATCH', f'/api/conversations/{first}', {'pinned': True}),
             ('DELETE', f'/api/conversations/{first}', None),
         ):
-            self.assertEqual(self.client.request(method, path, json=payload).status_code, 400)
+            self.assertEqual(self.client.request(method, path, json=payload).status_code, 401)
 
     def test_other_session_deletion_clears_stale_context(self):
         first = self.client.get('/api/state').json()['conversation_id']
         self.send('Private context')
         self.client.post('/api/document', files={'file': ('private.txt', b'private')})
         with TestClient(app) as other:
-            other.post('/api/users/1/select')
+            other.post('/api/auth/login', json={'email': 'tester@example.com', 'password': 'test-password-123'})
             other.delete(f'/api/conversations/{first}')
         state = self.client.get('/api/state').json()
         self.assertIsNone(state['conversation_id'])

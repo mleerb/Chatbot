@@ -11,6 +11,8 @@ __pycache__/
 .env
 .env.*
 !.env.example
+.docker.env
+!.docker.env.example
 compose.override.yaml
 documents/*
 !documents/.gitkeep

@@ -80,6 +80,7 @@ class UploadTests(unittest.TestCase):
         first = self.upload('a.txt', b'first')
         second = self.upload('b.txt', b'second')
         with TestClient(app) as other:
+            other.post('/api/auth/login', json={'email': 'tester@example.com', 'password': 'test-password-123'})
             for path in ('/api/document/download', '/api/document/edited'):
                 self.assertEqual(other.get(path, params={'file_id': first['id']}).status_code, 404)
         self.assertEqual(self.client.delete('/api/document', params={'file_id': first['id']}).status_code, 200)
@@ -114,9 +115,9 @@ class UploadTests(unittest.TestCase):
             self.assertEqual(response.content, str(index).encode())
         self.assertEqual(self.client.get('/api/files/download', params={'file_id': 'missing'}).status_code, 404)
         with TestClient(app) as other:
+            other.post('/api/auth/login', json={'email': 'tester@example.com', 'password': 'test-password-123'})
             self.assertEqual(other.get('/api/files/download', params={'file_id': files[0]['id']}).status_code, 404)
-        self.client.post('/api/users', json={'name': 'Another'})
-        self.client.post('/api/users/2/select')
+        self.client.post('/api/auth/register', json={'name': 'Another', 'email': 'another@example.com', 'password': 'test-password-123'})
         state = self.client.get('/api/state').json()
         self.assertEqual(state['generated_files'], [])
         self.assertEqual(state['uploads'], [])

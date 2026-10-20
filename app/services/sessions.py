@@ -5,6 +5,7 @@ from uuid import uuid4
 
 COOKIE = "chat_session"
 SESSION_TTL = 60 * 60 * 12
+GUEST_CLOSE_DELAY = 15
 MAX_SESSIONS = 100
 
 
@@ -44,6 +45,11 @@ class Upload:
 @dataclass
 class ChatSession:
     user_id: int | None = None
+    account: dict | None = None
+    guest: bool = False
+    close_timer: threading.Timer | None = field(default=None, repr=False)
+    guest_messages: list[dict] = field(default_factory=list)
+    guest_conversation: dict | None = None
     conversation_id: int | None = None
     history: list[dict] = field(default_factory=list)
     uploads: dict[str, Upload] = field(default_factory=dict)
@@ -67,6 +73,20 @@ class ChatSession:
 
     def clear_upload(self) -> None:
         self.uploads.clear()
+
+    def clear(self) -> None:
+        if self.close_timer is not None:
+            self.close_timer.cancel()
+            self.close_timer = None
+        self.user_id = None
+        self.account = None
+        self.guest = False
+        self.conversation_id = None
+        self.guest_conversation = None
+        self.history.clear()
+        self.guest_messages.clear()
+        self.uploads.clear()
+        self.generated.clear()
 
 
 sessions: dict[str, ChatSession] = {}

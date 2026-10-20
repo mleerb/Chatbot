@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Aster is an AI workspace for questions, writing, planning, and working with your files. Start with a thought and work toward something useful.">
+  <meta name="theme-color" content="#ece6fa">
+  <title>Aster — A little clarity. A lot of possibility.</title>
+  <script>
+    (() => {
+      let saved;
+      try { saved = localStorage.getItem('aster-theme'); } catch {}
+      document.documentElement.dataset.theme = saved === 'light' || saved === 'dark' ? saved : (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    })();
+  </script>
+  <style>
+    @font-face { font-family: 'Inter'; font-style: normal; font-weight: 400; font-display: swap; src: url('fonts/inter-latin-400-normal.woff2') format('woff2'); }
+    @font-face { font-family: 'Inter'; font-style: normal; font-weight: 500; font-display: swap; src: url('fonts/inter-latin-500-normal.woff2') format('woff2'); }
+    @font-face { font-family: 'Inter'; font-style: normal; font-weight: 600; font-display: swap; src: url('fonts/inter-latin-600-normal.woff2') format('woff2'); }
+    @font-face { font-family: 'Inter'; font-style: normal; font-weight: 700; font-display: swap; src: url('fonts/inter-latin-700-normal.woff2') format('woff2'); }
+    :root {
+      color-scheme: light;
+      --bg-1: #ece6fa; --bg-2: #d3c6f3; --surface: #f7f4ff;
+      --glass: rgba(255,255,255,.45); --glass-border: rgba(255,255,255,.7);
+      --accent: #8b5cf6; --accent-2: #c4b5fd;
+      --ink: #231a3a; --ink-soft: #6b6288;
+      --bubble-ai: #2a2145; --bubble-ai-text: #ffffff;
+      --bubble-user: rgba(255,255,255,.7);
+      --shadow: 0 20px 50px rgba(90,60,160,.18);
+      --gradient-start: #8b5cf6; --gradient-mid: #c4b5fd; --gradient-end: #a78bfa;
+      --white: #ffffff; --clear: transparent; --focus: #5931ab;
+      --primary-start: #6940c5; --primary-end: #7750cc; --primary-text: #ffffff;
+      --line: rgba(90,60,160,.13); --soft-panel: rgba(255,255,255,.32);
+      --blob-one: #bf9ff4; --blob-two: #bac5fc; --blob-three: #e0baf0;
+      --orb-base: #ad86ec; --orb-shade: #6f48c2; --orb-light: #f1e9ff;
+      --orb-glow: rgba(139,92,246,.25); --noise-opacity: .035;
+      --success: #357664; --code-bg: #201a34; --code-text: #e9e2fc;
+      --code-keyword: #c4b5fd; --code-string: #f3b9d4; --code-function: #a9e3cc;
+      --ai-muted: #c5badd; --ai-line: rgba(255,255,255,.16);
+    }
+    [data-theme="dark"] {
+      color-scheme: dark;
+      --bg-1: #120d1f; --bg-2: #1e1535; --surface: #1a1330;
+      --glass: rgba(40,30,70,.45); --glass-border: rgba(255,255,255,.12);
+      --accent: #a78bfa; --accent-2: #c4b5fd;
+      --ink: #f1ecff; --ink-soft: #b0a6cf;
+      --bubble-ai: #2d2350; --bubble-ai-text: #f1ecff;
+      --bubble-user: rgba(255,255,255,.08);
+      --shadow: 0 20px 50px rgba(0,0,0,.5);
+      --focus: #c4b5fd; --primary-start: #b49af6; --primary-end: #c4b5fd; --primary-text: #231a3a;
+      --line: rgba(196,181,253,.16); --soft-panel: rgba(196,181,253,.05);
+      --blob-one: #50317b; --blob-two: #303c83; --blob-three: #64366f;
+      --orb-base: #7651c7; --orb-shade: #35205c; --orb-light: #e4d4ff;
+      --orb-glow: rgba(139,92,246,.32); --noise-opacity: .055;
+      --success: #a9e3cc; --code-bg: #1b152d; --code-text: #e9e2fc;
+      --ai-muted: #c5badd; --ai-line: rgba(255,255,255,.16);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 110px; }
+    body { margin: 0; background: var(--bg-1); color: var(--ink); font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; }
+    body, .glass, .button, .icon-button, .ai-bubble, .user-bubble, .file-tile, details, pre { transition: background-color 300ms, color 300ms, border-color 300ms; }
+    a { color: inherit; text-decoration: none; }
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    a, button, summary { -webkit-tap-highlight-color: var(--clear); }
+    :focus-visible { outline: 3px solid var(--focus); outline-offset: 5px; }
+    ::selection { background: var(--accent-2); color: var(--bg-1); }
+    .skip-link { position: fixed; left: 20px; top: -80px; z-index: 100; padding: 12px 20px; border-radius: 14px; background: var(--surface); }
+    .skip-link:focus { top: 12px; }
+    .ambient { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: -1; background: radial-gradient(ellipse at 10% 5%,var(--bg-2),var(--clear) 55%),radial-gradient(ellipse at 100% 45%,var(--bg-2),var(--clear) 60%),var(--bg-1); }
+    .ambient::after { content: ''; position: absolute; inset: 0; opacity: var(--noise-opacity); background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Cpath filter='url(%23n)' opacity='.7' d='M0 0h160v160H0z'/%3E%3C/svg%3E"); }
+    .blob { position: absolute; width: min(65vw,700px); height: min(65vw,700px); border-radius: 50%; filter: blur(90px); opacity: .45; animation: drift 26s ease-in-out infinite alternate; }
+    .blob-one { background: var(--blob-one); left: -16%; top: 8%; }
+    .blob-two { background: var(--blob-two); right: -20%; top: 20%; animation-delay: -12s; }
+    .blob-three { background: var(--blob-three); left: 35%; bottom: -40%; animation-delay: -6s; }
+    .shell { width: min(1160px,calc(100% - 48px)); margin-inline: auto; }
+    .glass { background: var(--glass); border: 1px solid var(--glass-border); border-radius: 28px; box-shadow: var(--shadow); backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%); }
+    .navbar { position: sticky; top: 18px; margin-top: 18px; z-index: 30; padding: 12px 16px 12px 24px; border-radius: 24px; display: flex; align-items: center; gap: 24px; }
+    .wordmark { display: inline-flex; align-items: center; gap: 9px; font-size: 24px; font-weight: 650; letter-spacing: -.06em; }
+    .mark { width: 30px; height: 30px; color: var(--accent); flex: none; }
+    .nav-links { margin-inline: auto; display: flex; align-items: center; gap: 25px; font-size: 13px; color: var(--ink-soft); }
+    .nav-links a:hover, .footer a:hover { color: var(--ink); }
+    .nav-actions { display: flex; align-items: center; gap: 9px; font-size: 13px; }
+    .button { display: inline-flex; justify-content: center; align-items: center; gap: 9px; min-height: 48px; padding: 13px 24px; border: 1px solid var(--glass-border); border-radius: 999px; font-weight: 550; font-size: 14px; line-height: 1.4; white-space: nowrap; }
+    .button-primary { border-color: var(--clear); color: var(--primary-text); background: linear-gradient(110deg,var(--primary-start),var(--primary-end)); box-shadow: 0 6px 24px var(--orb-glow); }
+    .button-secondary { background: var(--glass); color: var(--ink); backdrop-filter: blur(20px); }
+    .button:hover { filter: brightness(1.05); }
+    .button-small { min-height: 40px; padding: 9px 17px; font-size: 12px; }
+    .icon-button { width: 42px; height: 42px; display: grid; place-items: center; background: var(--clear); border: 1px solid var(--line); border-radius: 50%; color: var(--ink); }
+    svg { display: inline-block; vertical-align: middle; }
+    .icon { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.65; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+    .sun { display: none; }
+    [data-theme="dark"] .sun { display: block; }
+    [data-theme="dark"] .moon { display: none; }
+    .menu-button { display: none; }
+    .hero { padding-top: 88px; text-align: center; position: relative; }
+    .hero-kicker { color: var(--ink-soft); font-size: 12px; display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border: 1px solid var(--glass-border); background: var(--soft-panel); border-radius: 99px; }
+    .hero-kicker .dot { background: var(--accent); width: 6px; height: 6px; border-radius: 50%; }
+    h1, h2, h3, p { margin: 0; }
+    h1, h2, h3 { letter-spacing: -.035em; }
+    h1 { font-size: clamp(44px,6.2vw,82px); line-height: 1.07; font-weight: 550; max-width: 850px; margin: 24px auto; }
+    .gradient-text { color: var(--accent); background: linear-gradient(90deg,var(--gradient-start),var(--gradient-mid),var(--gradient-end)); background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: var(--clear); }
+    .hero-copy { max-width: 480px; font-size: 16px; line-height: 1.8; color: var(--ink-soft); margin-inline: auto; }
+    .hero-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+    .hero-note { font-size: 11px; margin-top: 16px; color: var(--ink-soft); }
+    .orb { position: absolute; width: 165px; height: 165px; top: 80px; right: -7px; z-index: -1; border-radius: 50%; background: radial-gradient(ellipse at 30% 25%,var(--white) 0%,var(--orb-light) 8%,var(--orb-base) 39%,var(--orb-shade) 80%); box-shadow: inset -15px -20px 24px var(--orb-shade),inset 5px 8px 16px var(--orb-light),0 25px 70px var(--orb-glow); animation: float 8s ease-in-out infinite; }
+    .orb::after { content: ''; position: absolute; inset: 12px 20px 65%; border-radius: 50%; background: var(--white); filter: blur(13px); opacity: .65; transform: rotate(-25deg); }
+    .preview-stage { margin: 52px auto 0; max-width: 940px; position: relative; perspective: 1600px; padding: 18px 28px 45px; }
+    .mockup { display: grid; grid-template-columns: 185px minmax(0,1fr); overflow: hidden; text-align: left; border-radius: 26px; transform: rotateX(7deg) rotateY(-7deg) rotateZ(1deg); animation: mock-float 10s ease-in-out infinite; }
+    .mock-sidebar { padding: 25px 20px; background: var(--soft-panel); border-right: 1px solid var(--glass-border); display: flex; flex-direction: column; font-size: 11px; color: var(--ink-soft); }
+    .mock-sidebar .wordmark { color: var(--ink); font-size: 20px; margin-bottom: 28px; }
+    .mock-sidebar .mark { width: 24px; height: 24px; }
+    .mock-new { padding: 10px; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); display: flex; gap: 8px; align-items: center; }
+    .mock-sidebar-label { margin: 25px 0 10px; font-size: 10px; }
+    .mock-thread { padding: 9px 10px; margin-bottom: 5px; border-radius: 9px; }
+    .mock-thread-active { background: var(--glass); color: var(--ink); }
+    .mock-person { margin-top: auto; padding-top: 40px; display: flex; gap: 9px; align-items: center; }
+    .avatar { border-radius: 50%; width: 27px; height: 27px; display: grid; place-items: center; background: var(--accent-2); color: var(--bubble-ai); font-size: 10px; font-weight: 600; }
+    .mock-main { padding: 20px 28px 22px; min-width: 0; }
+    .mock-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); padding-bottom: 15px; font-size: 11px; }
+    .mock-header span { font-size: 9px; color: var(--ink-soft); }
+    .mock-conversation { padding-top: 20px; font-size: 12px; line-height: 1.65; }
+    .user-bubble { background: var(--bubble-user); border: 1px solid var(--glass-border); padding: 12px 16px; border-radius: 17px 17px 5px 17px; max-width: 85%; margin-left: auto; }
+    .ai-line { display: flex; align-items: flex-start; gap: 9px; margin-top: 18px; }
+    .ai-symbol { color: var(--accent); padding-top: 8px; }
+    .ai-symbol .mark { width: 23px; height: 23px; }
+    .ai-bubble { background: var(--bubble-ai); color: var(--bubble-ai-text); padding: 17px 20px; border-radius: 5px 18px 18px 18px; width: 100%; }
+    .ai-bubble strong { font-weight: 550; }
+    figure { margin-inline: 0; }
+    .preview-stage { margin-inline: auto; }
+    button { line-height: 1.4; }
+    .ai-bubble > p { margin-top: 5px; color: var(--ai-muted); font-size: 11px; }
+    pre { text-align: left; margin: 13px 0 0; background: var(--code-bg); color: var(--code-text); border: 1px solid var(--ai-line); border-radius: 10px; padding: 13px 14px; font: 10px/1.8 ui-monospace,monospace; overflow-x: auto; }
+    .keyword { color: var(--code-keyword); } .string { color: var(--code-string); } .function { color: var(--code-function); }
+    .mock-composer { margin-top: 20px; background: var(--glass); border: 1px solid var(--glass-border); border-radius: 14px; padding: 12px 13px; font-size: 11px; color: var(--ink-soft); display: flex; justify-content: space-between; align-items: center; }
+    .mock-send { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 9px; background: var(--accent); color: var(--surface); }
+    .floating-note { position: absolute; bottom: 15px; right: -10px; display: flex; align-items: center; gap: 12px; text-align: left; padding: 15px 20px; border-radius: 18px; font-size: 11px; transform: rotate(-3deg); }
+    .floating-note .icon { color: var(--success); } .floating-note strong { display: block; font-size: 12px; font-weight: 550; } .floating-note p { color: var(--ink-soft); margin-top: 3px; font-size: 10px; }
+    .preview-caption { font-size: 10px; color: var(--ink-soft); margin-top: 4px; }
+    .section { margin-top: 110px; }
+    .section-intro { max-width: 590px; margin-bottom: 32px; }
+    .section-intro.center { text-align: center; margin-inline: auto; }
+    h2 { font-size: clamp(30px,3.8vw,44px); font-weight: 550; line-height: 1.15; }
+    .section-intro p { font-size: 14px; line-height: 1.8; color: var(--ink-soft); margin-top: 15px; }
+    .feature-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 24px; }
+    .feature { padding: 32px; overflow: hidden; transition: transform 250ms,background-color 300ms,color 300ms,border-color 300ms; }
+    .feature:hover { transform: translateY(-4px); }
+    .feature-icon { width: 42px; height: 42px; border-radius: 14px; background: var(--soft-panel); border: 1px solid var(--glass-border); color: var(--accent); display: grid; place-items: center; margin-bottom: 22px; }
+    h3 { font-size: 20px; line-height: 1.3; font-weight: 550; }
+    .feature p, .step p { font-size: 13px; line-height: 1.8; color: var(--ink-soft); margin-top: 12px; max-width: 47ch; }
+    .file-stack { margin-top: 30px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .file-tile { display: flex; align-items: center; gap: 12px; padding: 16px; background: var(--bubble-user); border: 1px solid var(--glass-border); border-radius: 16px; min-width: 0; }
+    .file-tile > .icon { color: var(--accent); } .file-tile strong { font-size: 11px; display: block; font-weight: 550; overflow-wrap: anywhere; } .file-tile span { font-size: 10px; color: var(--ink-soft); display: block; margin-top: 3px; }
+    .file-footer { margin-top: 16px; display: flex; gap: 7px; align-items: center; font-size: 10px; color: var(--ink-soft); } .file-footer .icon { width: 13px; height: 13px; }
+    .draft-preview { margin-top: 27px; border: 1px solid var(--glass-border); border-radius: 17px; background: var(--soft-panel); padding: 20px; }
+    .draft-preview .draft-prompt { font-size: 11px; color: var(--ink-soft); padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+    .draft-preview p { font-size: 12px; color: var(--ink); margin-top: 12px; }
+    .pill-row { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 17px; }
+    .mini-pill { padding: 6px 10px; border: 1px solid var(--line); border-radius: 99px; color: var(--ink-soft); font-size: 10px; }
+    .wide-feature { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 30px; padding: 26px 32px; }
+    .wide-feature .feature-icon { margin: 0; flex: none; }
+    .wide-feature h3 { font-size: 17px; } .wide-feature p { margin-top: 5px; max-width: 64ch; font-size: 12px; }
+    .wide-feature .copy { flex: 1; }
+    .faq-layout { display: grid; grid-template-columns: .85fr 1.3fr; gap: 65px; }
+    .faq-list { padding: 8px 26px; }
+    details { border-bottom: 1px solid var(--line); } details:last-child { border: 0; }
+    summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 22px 0; font-size: 13px; font-weight: 550; list-style: none; cursor: pointer; }
+    summary::-webkit-details-marker { display: none; } summary .icon { width: 16px; height: 16px; transition: transform 200ms; color: var(--ink-soft); } details[open] summary .icon { transform: rotate(45deg); }
+    details > p { margin: -5px 24px 23px 0; font-size: 12px; line-height: 1.9; color: var(--ink-soft); }
+    details a { text-decoration: underline; text-underline-offset: 3px; }
+    .final-cta { text-align: center; padding: 55px 24px; position: relative; overflow: hidden; }
+    .final-cta::before { content: ''; position: absolute; width: 320px; height: 200px; border-radius: 50%; background: var(--orb-glow); filter: blur(60px); top: -100px; left: calc(50% - 160px); pointer-events: none; }
+    .final-cta h2 { position: relative; } .final-cta p { font-size: 13px; color: var(--ink-soft); line-height: 1.8; margin: 16px auto 24px; max-width: 430px; }
+    .footer { display: flex; justify-content: space-between; gap: 24px; align-items: center; padding-block: 40px 30px; font-size: 11px; color: var(--ink-soft); }
+    .footer .wordmark { font-size: 19px; color: var(--ink); } .footer .mark { width: 23px; height: 23px; }
+    .footer-links { display: flex; gap: 22px; }
+    .reveal { opacity: 1; }
+    .motion-ready .reveal { opacity: 0; transform: translateY(18px); transition: opacity 650ms,transform 650ms; }
+    .motion-ready .reveal.visible { opacity: 1; transform: none; }
+    @keyframes drift { to { transform: translate(80px,-50px) scale(1.12); } }
+    @keyframes float { 50% { transform: translateY(-15px) rotate(4deg); } }
+    @keyframes mock-float { 50% { transform: rotateX(5deg) rotateY(-5deg) rotateZ(.5deg) translateY(-9px); } }
+    @media (min-width: 1440px) { .orb { right: 10px; } }
+    @media (max-width: 1000px) {
+      .navbar { gap: 18px; } .nav-links { gap: 17px; font-size: 12px; }
+      .login-link { display: none; } .orb { width: 115px; height: 115px; top: 100px; right: 0; opacity: .65; }
+      .floating-note { right: 0; bottom: 10px; }
+    }
+    @media (max-width: 760px) {
+      .shell { width: calc(100% - 32px); }
+      .navbar { top: 12px; margin-top: 12px; padding: 10px 12px 10px 18px; gap: 10px; border-radius: 21px; }
+      .navbar > .wordmark { margin-right: auto; font-size: 22px; }
+      .nav-actions .button { display: none; }
+      .menu-button { display: grid; }
+      .nav-links { display: none; position: absolute; left: 0; right: 0; top: calc(100% + 10px); padding: 18px; border-radius: 22px; background: var(--surface); border: 1px solid var(--glass-border); box-shadow: var(--shadow); }
+      .nav-links.open { display: grid; gap: 4px; }
+      .nav-links a { padding: 13px; font-size: 14px; border-radius: 12px; }
+      .hero { padding-top: 65px; } h1 { margin-block: 22px; max-width: 620px; }
+      .hero-copy { font-size: 14px; max-width: 390px; }
+      .orb { width: 90px; height: 90px; right: -5px; top: 45px; opacity: .4; }
+      .preview-stage { padding: 10px 0 40px; margin-top: 35px; }
+      .mockup { grid-template-columns: 135px minmax(0,1fr); transform: rotateX(4deg) rotateY(-3deg); animation: none; }
+      .mock-sidebar { padding: 22px 12px; } .mock-main { padding: 17px 18px; }
+      .floating-note { padding: 12px 15px; right: 8px; }
+      .section { margin-top: 75px; }
+      .feature-grid { gap: 16px; } .feature { padding: 25px; }
+      .file-stack { grid-template-columns: 1fr; gap: 8px; } .file-tile { padding: 12px; }
+      .wide-feature { gap: 18px; flex-wrap: wrap; } .wide-feature .button { margin-left: 60px; }
+      .faq-layout { grid-template-columns: 1fr; gap: 0; } .faq-layout .section-intro { max-width: 480px; }
+    }
+    @media (max-width: 520px) {
+      h1 { font-size: 43px; letter-spacing: -.045em; } .hero-kicker { font-size: 10px; }
+      .hero-copy { max-width: 310px; font-size: 13px; }
+      .hero-actions { gap: 9px; } .hero-actions .button { padding-inline: 18px; font-size: 12px; min-height: 46px; }
+      .hero-note { font-size: 10px; }
+      .mockup { display: block; transform: none; border-radius: 22px; } .mock-sidebar { display: none; }
+      .mock-main { padding: 17px 14px; } .mock-conversation { font-size: 11px; } .mock-header span { font-size: 8px; }
+      .ai-bubble { padding: 14px 12px; } .ai-bubble > p { font-size: 10px; } pre { font-size: 8px; padding: 10px; }
+      .ai-symbol .mark { width: 19px; height: 19px; } .ai-line { gap: 6px; }
+      .floating-note { bottom: 7px; right: 8px; padding: 10px 13px; } .floating-note strong { font-size: 10px; } .floating-note p { font-size: 9px; }
+      .wide-feature { grid-column: auto; } .feature { padding: 27px; }
+      .file-stack { grid-template-columns: 1fr 1fr; gap: 8px; } .file-tile { gap: 7px; padding: 11px 8px; } .file-tile > .icon { width: 17px; } .file-tile strong { font-size: 10px; } .file-tile span { font-size: 9px; }
+      .wide-feature .button { margin-left: 0; width: 100%; }
+      .wide-feature .copy { flex-basis: calc(100% - 65px); }
+      .faq-list { padding-inline: 22px; } summary { font-size: 12px; }
+      .final-cta { padding: 42px 23px; } .final-cta p { font-size: 12px; }
+      .footer { flex-wrap: wrap; padding-top: 30px; gap: 22px; } .footer > p { flex-basis: 100%; order: 3; line-height: 1.8; } .footer-links { margin-left: auto; gap: 15px; font-size: 10px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+      .motion-ready .reveal { opacity: 1; transform: none; } .feature:hover { transform: none; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="ambient" aria-hidden="true"><div class="blob blob-one"></div><div class="blob blob-two"></div><div class="blob blob-three"></div></div>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <symbol id="aster" viewBox="0 0 32 32"><path d="M16 3v26M3 16h26M6.8 6.8l18.4 18.4M6.8 25.2L25.2 6.8" fill="none" stroke="currentColor" stroke-width="4.2" stroke-linecap="round"/></symbol>
+    <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="file" viewBox="0 0 24 24"><path d="M14 3H5v18h14V8l-5-5ZM14 3v6h5M8 13h8M8 17h5"/></symbol>
+    <symbol id="edit" viewBox="0 0 24 24"><path d="m16 4 4 4M4 20l5-1L20 8a2.8 2.8 0 0 0-4-4L5 15l-1 5ZM4 20h16"/></symbol>
+    <symbol id="chat" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 1-8 8H8l-5 3 1-6a8 8 0 1 1 16-5Z"/></symbol>
+    <symbol id="arrow" viewBox="0 0 24 24"><path d="M12 19V5m-6 6 6-6 6 6"/></symbol>
+    <symbol id="lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2"/></symbol>
+  </defs></svg>
+  <header class="navbar glass shell">
+    <a class="wordmark" href="#" aria-label="Aster home"><svg class="mark" aria-hidden="true"><use href="#aster"/></svg>Aster</a>
+    <nav class="nav-links" id="navigation" aria-label="Main navigation">
+      <a href="#features">Features</a><a href="#faq">FAQ</a>
+    </nav>
+    <div class="nav-actions">
+      <button type="button" class="icon-button" id="theme-toggle" aria-label="Switch to dark theme">
+        <svg class="icon moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14A8.7 8.7 0 0 1 10 3.5 8.7 8.7 0 1 0 20.5 14Z"/></svg>
+        <svg class="icon sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg>
+      </button>
+      <a class="login-link button button-small" href="/chat">Log in</a>
+      <a class="button button-primary button-small" href="/chat">Get started</a>
+      <button type="button" class="icon-button menu-button" id="menu-toggle" aria-label="Open navigation" aria-expanded="false" aria-controls="navigation"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    </div>
+  </header>
+  <main class="shell" id="main" tabindex="-1">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="orb" aria-hidden="true"></div>
+      <p class="hero-kicker"><span class="dot" aria-hidden="true"></span>Your AI thinking partner</p>
+      <h1 id="hero-title">A little clarity.<br><span class="gradient-text">A lot of possibility.</span></h1>
+      <p class="hero-copy">Ask a question. Shape an idea. Make something useful.</p>
+      <div class="hero-actions"><a class="button button-primary" href="/chat">Start a conversation<svg class="icon" aria-hidden="true"><use href="#chat"/></svg></a><a class="button button-secondary" href="#features">Explore Aster</a></div>
+      <p class="hero-note">Your conversations. Your space.</p>
+      <figure class="preview-stage" aria-label="Illustrative Aster conversation preview, not a live chat">
+        <div class="mockup glass">
+          <aside class="mock-sidebar" aria-hidden="true">
+            <div class="wordmark"><svg class="mark"><use href="#aster"/></svg>Aster</div>
+            <div class="mock-new"><svg class="icon" style="width:13px;height:13px"><use href="#plus"/></svg>New conversation</div>
+            <p class="mock-sidebar-label">Your conversations</p>
+            <div class="mock-thread mock-thread-active">A thoughtful first draft</div><div class="mock-thread">Ideas for the weekend</div><div class="mock-thread">Make sense of my notes</div>
+            <div class="mock-person"><div class="avatar">J</div><span>Jamie’s workspace</span></div>
+          </aside>
+          <div class="mock-main">
+            <div class="mock-header"><strong>A thoughtful first draft</strong><span>Illustrative preview</span></div>
+            <div class="mock-conversation">
+              <div class="user-bubble">Help me write a tiny Python script to organize my ideas by topic.</div>
+              <div class="ai-line"><div class="ai-symbol"><svg class="mark" aria-hidden="true"><use href="#aster"/></svg></div><div class="ai-bubble"><strong>A little structure goes a long way.</strong><p>Start with a dictionary. Give each topic a home for its ideas.</p><pre><code><span class="keyword">def</span> <span class="function">add_idea</span>(notebook, topic, idea):
+    notebook.<span class="function">setdefault</span>(topic, []).<span class="function">append</span>(idea)
+
+ideas = {}
+<span class="function">add_idea</span>(ideas, <span class="string">"weekend"</span>, <span class="string">"learn pottery"</span>)</code></pre><p>Want to save these to a file next?</p></div></div>
+            </div>
+            <div class="mock-composer" aria-hidden="true"><span>Where should we take this?</span><span class="mock-send"><svg class="icon" style="width:15px;height:15px"><use href="#arrow"/></svg></span></div>
+          </div>
+        </div>
+        <div class="floating-note glass" aria-hidden="true"><svg class="icon"><use href="#check"/></svg><div><strong>One thought, a little further.</strong><p>Make room for the follow-up.</p></div></div>
+        <figcaption class="preview-caption">An example conversation. AI answers can be incorrect; review before use.</figcaption>
+      </figure>
+    </section>
+    <section class="section" id="features" aria-labelledby="features-title">
+      <div class="section-intro reveal"><h2 id="features-title">Think. Write. Make progress.</h2><p>Start with what’s on your mind.</p></div>
+      <div class="feature-grid">
+        <article class="feature glass reveal"><div class="feature-icon"><svg class="icon" aria-hidden="true"><use href="#file"/></svg></div><h3>Bring the context with you.</h3><p>Add a document, text file, or image. Ask Aster to help you understand it.</p><div class="file-stack" aria-label="Example supported files"><div class="file-tile"><svg class="icon" aria-hidden="true"><use href="#file"/></svg><div><strong>Project brief.docx</strong><span>Word document</span></div></div><div class="file-tile"><svg class="icon" aria-hidden="true"><use href="#file"/></svg><div><strong>My ideas.md</strong><span>Markdown notes</span></div></div></div><div class="file-footer"><svg class="icon" aria-hidden="true"><use href="#lock"/></svg>Uploads stay in temporary session storage.</div></article>
+        <article class="feature glass reveal"><div class="feature-icon"><svg class="icon" aria-hidden="true"><use href="#edit"/></svg></div><h3>Get past the first draft.</h3><p>Write, plan, or work through code. Refine it together.</p><div class="draft-preview"><div class="draft-prompt">“Make this a little more human.”</div><p>Hi Maya, I’ve been thinking about your idea. Could we find half an hour this week to explore it together?</p><div class="pill-row" aria-hidden="true"><span class="mini-pill">A clearer opening</span><span class="mini-pill">Your voice, kept</span></div></div></article>
+        <article class="feature wide-feature glass reveal"><div class="feature-icon"><svg class="icon" aria-hidden="true"><use href="#chat"/></svg></div><div class="copy"><h3>A conversation worth coming back to.</h3><p>Keep your chats in one place. Return when you’re ready.</p></div><a class="button button-secondary button-small" href="/chat">Open your workspace</a></article>
+      </div>
+    </section>
+    <section class="section faq-layout" id="faq" aria-labelledby="faq-title">
+      <div class="section-intro reveal"><h2 id="faq-title">Good to know.</h2><p>Before you start.</p></div>
+      <div class="faq-list glass reveal">
+        <details><summary>How do I get started?<svg class="icon" aria-hidden="true"><use href="#plus"/></svg></summary><p>Choose Continue as guest to try a temporary chat, with no account needed. Create an account or log in if you want to keep your chat history.</p></details>
+        <details><summary>Which files can I use?<svg class="icon" aria-hidden="true"><use href="#plus"/></svg></summary><p>Add Word documents, text files, or images. Images need a vision-capable model. PDF, Excel, and PowerPoint content is not currently read.</p></details>
+        <details><summary>What gets saved?<svg class="icon" aria-hidden="true"><use href="#plus"/></svg></summary><p>Account chats are saved. Guest chats stay in this tab, with no idle timeout. Closing the tab, ending the session, or a server restart ends the chat. Files are temporary in both modes. Relevant content goes to the configured AI provider. Review important answers and keep this local app off the public internet.</p></details>
+      </div>
+    </section>
+    <section class="section final-cta glass reveal" aria-labelledby="cta-title"><h2 id="cta-title">Start somewhere.<br>See where it takes you.</h2><p>You don’t have to have it all figured out.<br>Bring one question. We’ll start there.</p><a class="button button-primary" href="/chat">Let’s talk<svg class="icon" aria-hidden="true"><use href="#chat"/></svg></a></section>
+  </main>
+  <footer class="footer shell"><a class="wordmark" href="#" aria-label="Aster home"><svg class="mark" aria-hidden="true"><use href="#aster"/></svg>Aster</a><p>A little clarity, one conversation at a time.</p><nav class="footer-links" aria-label="Footer navigation"><a href="#features">Explore</a><a href="#faq">Questions</a><a href="/chat">Workspace</a></nav></footer>
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const toggle = document.getElementById('theme-toggle');
+      const media = matchMedia('(prefers-color-scheme: dark)');
+      let explicit = false;
+      try { explicit = ['light', 'dark'].includes(localStorage.getItem('aster-theme')); } catch {}
+      const syncTheme = () => {
+        const dark = root.dataset.theme === 'dark';
+        toggle.setAttribute('aria-label', `Switch to ${dark ? 'light' : 'dark'} theme`);
+        document.querySelector('meta[name="theme-color"]').content = getComputedStyle(root).getPropertyValue('--bg-1').trim();
+      };
+      syncTheme();
+      toggle.addEventListener('click', () => {
+        root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+        explicit = true;
+        try { localStorage.setItem('aster-theme', root.dataset.theme); } catch {}
+        syncTheme();
+      });
+      media.addEventListener('change', event => {
+        if (!explicit) { root.dataset.theme = event.matches ? 'dark' : 'light'; syncTheme(); }
+      });
+      const menu = document.getElementById('navigation');
+      const menuToggle = document.getElementById('menu-toggle');
+      const setMenu = open => {
+        menu.classList.toggle('open', open);
+        menuToggle.setAttribute('aria-expanded', String(open));
+        menuToggle.setAttribute('aria-label', `${open ? 'Close' : 'Open'} navigation`);
+      };
+      menuToggle.addEventListener('click', () => setMenu(menuToggle.getAttribute('aria-expanded') !== 'true'));
+      menu.addEventListener('click', event => { if (event.target.closest('a')) setMenu(false); });
+      document.addEventListener('click', event => { if (!event.target.closest('.navbar')) setMenu(false); });
+      document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && menuToggle.getAttribute('aria-expanded') === 'true') { setMenu(false); menuToggle.focus(); }
+      });
+      document.addEventListener('focusin', event => { if (!event.target.closest('.navbar')) setMenu(false); });
+      matchMedia('(min-width: 761px)').addEventListener('change', () => setMenu(false));
+      const openHash = () => {
+        const target = document.getElementById(location.hash.slice(1));
+        if (target instanceof HTMLDetailsElement) target.open = true;
+      };
+      window.addEventListener('hashchange', openHash);
+      openHash();
+      if ('IntersectionObserver' in window && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        const observer = new IntersectionObserver(entries => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting) { entry.target.classList.add('visible'); observer.unobserve(entry.target); }
+          });
+        }, { threshold: .08 });
+        document.querySelectorAll('.reveal').forEach(element => observer.observe(element));
+        root.classList.add('motion-ready');
+      }
+    })();
+  </script>
+</body>
+</html>

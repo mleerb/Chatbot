@@ -2,6 +2,7 @@ from pathlib import Path
 
 from app.core.errors import ServiceError
 from app.db import repository
+from app.services import guest
 from app.services.conversations import activate, ensure_active
 from app.services.extract import file_context
 from app.services.sessions import ChatSession, Upload
@@ -14,11 +15,14 @@ def upload(session: ChatSession, filename: str, data: bytes):
     text, image_url, status = file_context(filename, data)
     item = Upload(filename, data, text, image_url, status)
     with session.lock:
-        if session.user_id is None:
-            raise ServiceError(400, "Select a user before uploading")
+        if session.user_id is None and not session.guest:
+            raise ServiceError(400, "Log in or continue as guest")
         ensure_active(session)
         if session.conversation_id is None:
-            activate(session, repository.create_conversation(session.user_id))
+            if session.guest:
+                guest.create(session)
+            else:
+                activate(session, repository.create_conversation(session.user_id))
         session.uploads[item.id] = item
     return item.summary()
 

@@ -39,6 +39,7 @@ class EditTests(unittest.TestCase):
         self.assertEqual(sessions[token].latest_upload.document, 'Hello new world\n')
         self.assertEqual(self.client.get('/api/state').json()['uploads'][0]['edits'][0]['filename'], 'note.md')
         with TestClient(app) as another:
+            another.post('/api/auth/login', json={'email': 'tester@example.com', 'password': 'test-password-123'})
             self.assertEqual(another.get('/api/document/edited').status_code, 404)
         self.client.delete('/api/document')
         self.assertEqual(self.client.get('/api/document/edited').status_code, 404)

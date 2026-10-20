@@ -14,6 +14,7 @@ const server = createServer(async (request, response) => {
   if (request.url?.includes('missing')) response.statusCode = 404;
   response.end(JSON.stringify({
     path: request.url, cookie: request.headers.cookie, method: request.method,
+    forwardedHost: request.headers['x-forwarded-host'],
     type: request.headers['content-type'], body: Buffer.concat(chunks).toString('base64'),
   }));
 });
@@ -43,6 +44,13 @@ test('proxy preserves cookies, query parameters and download headers without cac
   const body = await response.json();
   assert.equal(body.path, '/api/document/download?file_id=abc&revision_id=def');
   assert.equal(body.cookie, 'chat_session=private');
+});
+
+test('proxy uses the browser-facing host instead of Next internal origin or spoofed forwarding', async () => {
+  const response = await proxy(new Request('http://localhost:3000/api/auth/login', {
+    method: 'POST', headers: { host: '127.0.0.1:18080', 'x-forwarded-host': 'evil.example' },
+  }));
+  assert.equal((await response.json()).forwardedHost, '127.0.0.1:18080');
 });
 
 test('multipart upload is streamed without changing its bytes or boundary', async () => {

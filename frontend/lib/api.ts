@@ -1,6 +1,8 @@
+import { guestToken } from './guest';
+
 export type Source = { title: string; url: string };
 export type Message = { role: 'user' | 'assistant'; content: string; sources?: Source[] };
-export type User = { id: number; name: string };
+export type User = { id: number; name: string; email?: string };
 export type Conversation = { id: number; user_id: number; title: string; pinned: boolean };
 export type DownloadInfo = { id: string; filename: string };
 export type Upload = DownloadInfo & { status: string; edits: DownloadInfo[] };
@@ -13,7 +15,10 @@ export function errorMessage(error: unknown): string {
 }
 
 export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(path, { credentials: 'same-origin', cache: 'no-store', ...options });
+  const headers = new Headers(options.headers);
+  const guest = guestToken();
+  if (guest) headers.set('x-guest-session', guest);
+  const response = await fetch(path, { credentials: 'same-origin', cache: 'no-store', ...options, headers });
   const data = await response.json().catch(() => null);
   if (!response.ok) throw new Error(typeof data?.detail === 'string' ? data.detail : 'Request failed');
   return data as T;

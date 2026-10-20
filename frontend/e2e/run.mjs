@@ -20,6 +20,7 @@ async function ready(url) {
 try {
   start(['e2e/backend.mjs']);
   cpSync(new URL('../.next/static', import.meta.url), new URL('../.next/standalone/.next/static', import.meta.url), { recursive: true });
+  cpSync(new URL('../public', import.meta.url), new URL('../.next/standalone/public', import.meta.url), { recursive: true });
   start(['.next/standalone/server.js'], {
     HOSTNAME: '127.0.0.1', PORT: '3100',
     BACKEND_URL: 'http://127.0.0.1:8101', NEXT_TELEMETRY_DISABLED: '1',
