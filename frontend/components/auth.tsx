@@ -5,8 +5,8 @@ import { errorMessage, request, type User } from '../lib/api';
 import Brand from './brand';
 import Logo from './logo';
 
-export default function Auth({ onSuccess, onGuest }: { onSuccess: (user: User) => Promise<void>; onGuest: () => Promise<void> }) {
-  const [register, setRegister] = useState(false);
+export default function Auth({ onSuccess, onGuest, signup = false }: { onSuccess: (user: User) => Promise<void>; onGuest: () => Promise<void>; signup?: boolean }) {
+  const [register, setRegister] = useState(signup);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   async function submit(event: FormEvent<HTMLFormElement>) {

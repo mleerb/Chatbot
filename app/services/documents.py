@@ -15,6 +15,8 @@ def upload(session: ChatSession, filename: str, data: bytes):
     filename = Path(filename.replace("\\", "/")).name
     if not filename:
         raise ServiceError(400, "Choose a file")
+    if session.guest:
+        guest.check_limit(session)
     text, image_url, status, pages = upload_context(filename, data, session.parsed)
     item = Upload(filename, data, text, image_url, status, pages=pages)
     with session.lock:

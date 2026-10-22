@@ -25,26 +25,23 @@ for (const width of [1440, 360]) {
     await page.getByRole('link', { name: 'Download temporary.txt', exact: true }).click();
     expect((await downloading).suggestedFilename()).toBe('temporary.txt');
     if (width <= 760) await page.getByRole('button', { name: 'Open sidebar' }).click();
-    await expect(page.locator('.guest-notice')).toContainText('this tab is open');
+    await expect(page.locator('.guest-notice')).toContainText('starting a new chat deletes the current one');
     await page.getByRole('button', { name: 'Options for A guest question', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Pin A guest question', exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: 'Rename A guest question', exact: true }).click();
     await page.getByLabel('Conversation title').fill('Guest notes');
     await page.getByRole('button', { name: 'Save name' }).click();
     await expect(page.getByRole('button', { name: 'Guest notes', exact: true })).toBeVisible();
+    page.once('dialog', dialog => dialog.accept());
     await page.getByRole('button', { name: '+ New conversation', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Temporary chat 2' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Temporary chat' })).toBeVisible();
     await expect(page.locator('.message.user')).toHaveCount(0);
     await expect(page.locator('.attachment:not(.pending)')).toHaveCount(0);
-    if (width <= 760) await page.getByRole('button', { name: 'Open sidebar' }).click();
-    await page.getByRole('button', { name: 'Guest notes', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Guest notes' })).toBeVisible();
-    await expect(page.locator('.message.user')).toContainText('A guest question');
-    await expect(page.locator('.attachment:not(.pending)')).toHaveCount(1);
     await page.reload();
-    await expect(page.locator('.message.user')).toContainText('A guest question');
+    await expect(page.getByRole('heading', { name: 'Temporary chat' })).toBeVisible();
     if (width <= 760) await page.getByRole('button', { name: 'Open sidebar' }).click();
-    await expect(page.getByRole('button', { name: 'Temporary chat 2', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Guest notes', exact: true })).toHaveCount(0);
+    await expect(page.locator('.conversation-link')).toHaveCount(1);
     page.once('dialog', dialog => dialog.accept());
     await page.getByRole('button', { name: 'End guest session / Log in', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
@@ -57,3 +54,20 @@ for (const width of [1440, 360]) {
     expect(await reopened.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 }
+
+test('guest limit freezes the composer and offers sign up', async ({ page }) => {
+  await page.goto('/chat');
+  await page.getByRole('button', { name: 'Continue as guest', exact: true }).click();
+  await expect(page.getByText('free tokens')).toHaveCount(0);
+  await page.getByLabel('Your message').fill('Use every token');
+  await page.getByRole('button', { name: 'Send message' }).click();
+  await expect(page.getByText('You’ve used your free guest chat.')).toBeVisible();
+  await expect(page.getByText('free tokens')).toHaveCount(0);
+  await expect(page.getByLabel('Your message')).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Attach files' })).toBeDisabled();
+  await page.reload();
+  await expect(page.getByLabel('Your message')).toBeDisabled();
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Sign up', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'A space of your own.' })).toBeVisible();
+});

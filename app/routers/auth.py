@@ -3,6 +3,7 @@ from fastapi import APIRouter, Request, Response
 from app.dependencies import BrowserSession
 from app.schemas.auth import AuthResponse, LoginRequest, RegisterRequest
 from app.services import auth as service
+from app.services.sessions import GUEST_COOKIE
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -14,7 +15,7 @@ def me(current: BrowserSession):
 
 @router.post("/guest", response_model=AuthResponse)
 def guest(current: BrowserSession, request: Request, response: Response):
-    token = service.guest(current, response, request.url.scheme == "https")
+    token = service.guest(current, response, request.url.scheme == "https", request.cookies.get(GUEST_COOKIE))
     return {"user": None, "guest": True, "guest_token": token}
 
 

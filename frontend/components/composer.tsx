@@ -7,6 +7,7 @@ type Props = {
   disabled: boolean;
   selected: boolean;
   guest: boolean;
+  limited: boolean;
   uploads: Upload[];
   pending: string[];
   onSend: (message: string) => Promise<void>;
@@ -14,7 +15,7 @@ type Props = {
   onRemove: (id?: string) => Promise<void>;
 };
 
-export default function Composer({ disabled, selected, guest, uploads, pending, onSend, onUpload, onRemove }: Props) {
+export default function Composer({ disabled, selected, guest, limited, uploads, pending, onSend, onUpload, onRemove }: Props) {
   const uploading = pending.length > 0;
   const unsent = uploads.filter(file => !file.sent);
   const [message, setMessage] = useState('');
@@ -36,10 +37,10 @@ export default function Composer({ disabled, selected, guest, uploads, pending, 
     }
   }
   return <div className="composer-area">
-    <form className="composer" onSubmit={submit}>
+    <form className="composer" data-frozen={limited || undefined} onSubmit={submit}>
       <AttachedFiles uploads={unsent} pending={pending} disabled={disabled || uploading} onRemove={onRemove} />
       <label htmlFor="message" className="sr-only">Your message</label>
-      <textarea ref={input} id="message" name="message" placeholder={selected ? 'Message Aster…' : 'Log in to start chatting'}
+      <textarea ref={input} id="message" name="message" placeholder={limited ? 'Guest limit reached. Log in or sign up to keep chatting.' : selected ? 'Message Aster…' : 'Log in to start chatting'}
         rows={2} maxLength={10000} required disabled={disabled} value={message} onKeyDown={keyDown}
         onChange={event => {
           setMessage(event.target.value);

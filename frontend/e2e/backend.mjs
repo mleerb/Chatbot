@@ -18,8 +18,19 @@ function createConversation(userId, title = 'New conversation') {
 }
 function newConversation(state) {
   if (!state.guest) return createConversation(state.user_id);
-  const number = list(owner(state)).length + 1;
-  return createConversation(owner(state), number === 1 ? 'Temporary chat' : `Temporary chat ${number}`);
+  for (const chat of list(owner(state))) {
+    conversations.splice(conversations.indexOf(chat), 1);
+    histories.delete(chat.id);
+    chatFiles.delete(chat.id);
+  }
+  Object.assign(state, { conversation_id: null, uploads: [], generated_files: [] });
+  return createConversation(owner(state), 'Temporary chat');
+}
+function overLimit(state, response) {
+  if (!state.guest || !state.guest_limited) return false;
+  response.statusCode = 403;
+  response.end(JSON.stringify({ detail: 'Guest limit reached. Log in or sign up to keep chatting.' }));
+  return true;
 }
 function list(userId) {
   return conversations.filter(chat => chat.user_id === userId).sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.id - a.id);
@@ -52,13 +63,14 @@ createServer(async (request, response) => {
   if (url.pathname === '/api/auth/me') return json({ user: users.find(user => user.id === state.user_id) ?? null, guest: !!state.guest });
   if (url.pathname === '/api/auth/guest') {
     const guestToken = randomUUID();
-    sessions.set(guestToken, { user_id: null, owner: `guest:${guestToken}`, conversation_id: null, guest: true, messages: [], uploads: [], generated_files: [] });
+    sessions.set(guestToken, { user_id: null, owner: `guest:${guestToken}`, conversation_id: null, guest: true, guest_tokens: 0, guest_limited: false, messages: [], uploads: [], generated_files: [] });
     return json({ user: null, guest: true, guest_token: guestToken });
   }
   if (url.pathname === '/api/auth/guest/close') return json({ ok: true });
   if (url.pathname === '/api/auth/logout') {
     if (!state.guest) keepFiles(state);
     state.guest = false;
+    state.guest_limited = false;
     Object.assign(state, { user_id: null, conversation_id: null, messages: [], uploads: [], generated_files: [] });
     return json({ user: null });
   }
@@ -126,6 +138,7 @@ createServer(async (request, response) => {
     }
   }
   if (url.pathname === '/api/document' && request.method === 'POST') {
+    if (overLimit(state, response)) return;
     const form = await new Response(body, { headers: { 'content-type': request.headers['content-type'] } }).formData();
     const file = form.get('file');
     if (file.name.startsWith('slow')) await new Promise(resolve => setTimeout(resolve, 1500));
@@ -140,8 +153,15 @@ createServer(async (request, response) => {
     keepFiles(state);
     return json({ ok: true });
   }
+  if (url.pathname === '/api/export') {
+    const payload = JSON.parse(body);
+    response.setHeader('content-type', 'application/octet-stream');
+    response.setHeader('content-disposition', `attachment; filename="aster-answer.${payload.format}"`);
+    return response.end(payload.content);
+  }
   if (url.pathname === '/api/chat') {
     const question = JSON.parse(body).message;
+    if (overLimit(state, response)) return;
     if (!state.conversation_id) activate(state, newConversation(state));
     const current = conversations.find(chat => chat.id === state.conversation_id);
     if (!state.messages.length && current && !current.named) Object.assign(current, { title: question.slice(0, 50), named: true });
@@ -150,8 +170,17 @@ createServer(async (request, response) => {
     keepFiles(state);
     const attachments = state.uploads.filter(file => !file.sent).map(({ id, filename }) => ({ id, filename }));
     for (const file of state.uploads) file.sent = true;
-    state.messages.push({ role: 'user', content: question, attachments }, { role: 'assistant', content: 'Edited the file.' });
-    return json({ ...state, answer: 'Edited the file.', display_answer: 'Edited the file.', sources: [{ title: 'Evidence', url: 'https://example.com' }] });
+    const answers = {
+      table: '| Plan | Price |\n| --- | --- |\n| Basic | $5 |\n| Pro | $9 |',
+      code: 'Run this:\n\n```python\nprint("hi")\n```\n\n<b>raw html</b> [bad](javascript:alert(1)) ![tracker](https://example.com/x.png) [good](https://example.com/docs)',
+    };
+    const reply = answers[Object.keys(answers).find(kind => question.toLowerCase().includes(`as a ${kind}`))] ?? 'Edited the file.';
+    state.messages.push({ role: 'user', content: question, attachments }, { role: 'assistant', content: reply });
+    if (state.guest) {
+      state.guest_tokens += question.startsWith('Use every token') ? 50000 : Math.ceil((question.length + 16) / 4);
+      state.guest_limited = state.guest_tokens >= 50000;
+    }
+    return json({ ...state, answer: reply, display_answer: reply, sources: [{ title: 'Evidence', url: 'https://example.com' }] });
   }
   if (url.pathname.endsWith('/download') || url.pathname.endsWith('/edited')) {
     response.setHeader('content-type', 'application/octet-stream');

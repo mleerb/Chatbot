@@ -14,4 +14,7 @@ When asked to create a file, the agent uses the session-bound `create_text_file`
 
 Tavily search can be enabled separately for current or externally verifiable questions. The agent chooses whether to search, but the tool sends only the user's current question to Tavily; it cannot send uploaded file data. For file-only questions, it should answer from the file without searching. When search returns results, the chat API appends source URLs to its `answer`; the browser displays the same sources as clickable links alongside the plain answer, and they persist in PostgreSQL account chat history. Guest citations remain only in temporary session memory. No search means no web citations. Links indicate retrieved evidence, not automatic fact checking.
 
+Any answer can be exported from its **⋯** options menu as Markdown (`.md`, the answer text unchanged), Word (`.docx`) or PDF. Word and PDF exports convert the Markdown: headings become headings, tables become real tables, bullet and numbered items become paragraphs with their markers, code blocks become plain paragraphs, and inline formatting is removed, keeping link URLs in brackets. Exporting does not call the model and does not use the guest token budget.
+
 This local demo uses email/password accounts and account-scoped file access, but is not hardened for public deployment. Do not bind it to a public interface.
+

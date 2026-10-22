@@ -18,8 +18,18 @@ def make_agent(session_id: str | None = None, question: str = "", sources: list[
     )
 
 
+def used_tokens(messages) -> int:
+    total = 0
+    for message in messages:
+        metadata = getattr(message, "usage_metadata", None)
+        if isinstance(metadata, dict):
+            total += metadata.get("total_tokens", 0)
+    return total
+
+
 def answer_question(agent, question: str, history: list[dict], session_id: str,
-                    uploads: list[Upload] | None = None, trace: bool = True) -> str:
+                    uploads: list[Upload] | None = None, trace: bool = True,
+                    usage: list[int] | None = None) -> str:
     messages = conversation_messages(question, history, uploads)
     observation = trace_chat_turn(
         session_id=session_id,
@@ -33,6 +43,8 @@ def answer_question(agent, question: str, history: list[dict], session_id: str,
         answer = response_text(result["messages"][-1].content)
         if not answer:
             raise ValueError("Model returned an empty response")
+        if usage is not None:
+            usage.append(used_tokens(result["messages"]))
         if span is not None:
             span.update(output=answer)
     return answer

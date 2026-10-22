@@ -9,7 +9,8 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core.errors import ServiceError
 from app.db import repository
-from app.services.sessions import COOKIE, SESSION_TTL, ChatSession, sessions, sessions_lock
+from app.services.guest import METER_COOKIE_AGE, meter_id
+from app.services.sessions import COOKIE, GUEST_COOKIE, SESSION_TTL, ChatSession, sessions, sessions_lock
 
 hasher = PasswordHasher()
 dummy_hash = hasher.hash(secrets.token_urlsafe(24))
@@ -58,12 +59,16 @@ def establish(current, account, response, secure=False):
     replace_session(current, replacement, response, secure, persistent=True)
 
 
-def guest(current, response, secure=False):
+def guest(current, response, secure=False, meter=None):
     if current[1].account is not None:
         raise ServiceError(409, "Log out before starting a guest session")
     if current[1].guest:
         return current[0]
-    return replace_session(current, ChatSession(guest=True), response, secure)
+    replacement = ChatSession(guest=True, guest_meter=meter_id(meter))
+    token = replace_session(current, replacement, response, secure)
+    response.set_cookie(GUEST_COOKIE, replacement.guest_meter, max_age=METER_COOKIE_AGE,
+                        httponly=True, samesite="strict", secure=secure)
+    return token
 
 
 def replace_session(current, replacement, response, secure=False, persistent=False):

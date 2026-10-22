@@ -28,6 +28,7 @@ Detailed rules live in `.claude/rules/`. Claude Code loads them automatically; o
 - `safety.md`: secrets, sessions, loopback-only and Docker validation.
 - `git.md`: verify the `mleerb` push account and the commit author.
 - `reports.md`: daily HTML reports in `reports/`.
+- `docs.md`: every change also updates README, `docs/`, `.env.example`, rules and the private guides.
 
 ## Docs
 

@@ -23,6 +23,8 @@ export default function Chat() {
   const [active, setActive] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [files, setFiles] = useState<Files>(emptyFiles);
+  const [limitReached, setLimitReached] = useState(false);
+  const [signup, setSignup] = useState(false);
   const [busy, setBusy] = useState(true);
   const [pending, setPending] = useState(false);
   const [uploading, setUploading] = useState<string[]>([]);
@@ -135,6 +137,7 @@ export default function Chat() {
     setConversations(state.conversations);
     setMessages(state.messages);
     setFiles(state);
+    setLimitReached(!!state.guest_limited);
   }
   async function refreshFiles() {
     applyState(await request<State>('/api/state'));
@@ -164,8 +167,9 @@ export default function Chat() {
     setGuest(true);
     setError('');
   }
-  async function logout() {
+  async function logout(register = false) {
     if (!start()) return;
+    setSignup(register);
     try {
       await request('/api/auth/logout', { method: 'POST' });
       setGuestToken(null);
@@ -177,6 +181,7 @@ export default function Chat() {
       setActive(null);
       setMessages([]);
       setFiles(emptyFiles);
+      setLimitReached(false);
       setWarning('');
     } catch (error) { setError(errorMessage(error)); }
     finally { finish(); }
@@ -193,6 +198,7 @@ export default function Chat() {
       });
       setMessages(items => [...items, { role: 'assistant', content: result.display_answer ?? result.answer, sources: result.sources }]);
       setFiles(result);
+      setLimitReached(!!result.guest_limited);
     } catch (error) { setError(errorMessage(error)); }
     finally {
       setPending(false);
@@ -243,11 +249,15 @@ export default function Chat() {
 
   if (!ready) return <main className="app auth-app" data-theme={theme}>
     <button type="button" className="auth-theme icon-button" onClick={toggleTheme} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}><Icon name={theme === 'light' ? 'moon' : 'sun'} /></button>
-    {busy ? <p className="auth-loading" role="status">Opening Aster…</p> : <Auth onSuccess={loggedIn} onGuest={continueAsGuest} />}
+    {busy ? <p className="auth-loading" role="status">Opening Aster…</p> : <Auth key={signup ? 'signup' : 'login'} signup={signup} onSuccess={loggedIn} onGuest={continueAsGuest} />}
     {error && <p className="auth-error error" role="alert">{error}</p>}
   </main>;
 
   const locked = busy || uploading.length > 0;
+  const limited = guest && limitReached;
+  function endGuest(register = false) {
+    if (window.confirm('End this guest session? Messages and files will be cleared before you log in.')) void logout(register);
+  }
 
   return <main className="app" data-app data-theme={theme} data-sidebar={collapsed ? 'collapsed' : 'open'}>
     <dialog ref={sidebar} id="sidebar" className="sidebar" aria-label="Workspace sidebar" onClose={() => setSidebarOpen(false)}>
@@ -255,9 +265,9 @@ export default function Chat() {
         <button type="button" className="icon-button close-sidebar" aria-label="Close sidebar" title="Close sidebar" onClick={hideSidebar}><Icon name="sidebar" /></button>
       </div>
       <div className="account-info"><span className="account-avatar" aria-hidden="true">{account?.name.slice(0, 1) ?? 'G'}</span><div><strong>{account?.name ?? 'Guest'}</strong><span>{guest ? 'This session only' : account?.email}</span></div></div>
-      {guest && <div className="guest-notice"><strong>Temporary chats</strong><p>Nothing is saved to your account. Every chat stays while this tab is open. Closing the tab or restarting the server ends them.</p></div>}
+      {guest && <div className="guest-notice"><strong>Temporary chat</strong><p>Nothing is saved to your account. Guests have one chat at a time: starting a new chat deletes the current one. Closing the tab or restarting the server ends it.</p></div>}
       {(selected || guest) && <Conversations key={selected ?? 'guest'} conversations={conversations} selected={active} busy={locked} canPin={!guest}
-        onCreate={async () => { await conversationAction('/api/conversations', 'POST'); }}
+        onCreate={async () => { if (!guest || !conversations.length || window.confirm('Start a new chat? Your current guest chat and its files will be deleted.')) await conversationAction('/api/conversations', 'POST'); }}
         onSelect={async id => { await conversationAction(`/api/conversations/${id}/select`, 'POST'); }}
         onUpdate={(id, changes) => conversationAction(`/api/conversations/${id}`, 'PATCH', changes)}
         onDelete={id => conversationAction(`/api/conversations/${id}`, 'DELETE')} />}
@@ -266,7 +276,7 @@ export default function Chat() {
           aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}>
           <Icon name={theme === 'light' ? 'moon' : 'sun'} />{theme === 'light' ? 'Dark mode' : 'Light mode'}
         </button>
-        <button className="theme-toggle" type="button" disabled={locked} onClick={() => { if (!guest || window.confirm('End this guest session? Messages and files will be cleared before you log in.')) void logout(); }}>{guest ? 'End guest session / Log in' : 'Log out'}</button>
+        <button className="theme-toggle" type="button" disabled={locked} onClick={() => { if (guest) endGuest(); else void logout(); }}>{guest ? 'End guest session / Log in' : 'Log out'}</button>
         <a className="workspace-home" href="/">Back to Aster</a>
         <p>{guest ? 'Guest chats and files last while this tab is open.' : 'Chats and files are saved to your account.'}</p>
       </div>
@@ -283,11 +293,16 @@ export default function Chat() {
         </Messages>
       </div>
       <div className="feedback" aria-live="polite">
-        <p className="error" role="alert" hidden={!error}>{error}</p>
+        <p className="error" role="alert" hidden={!error || limited}>{error}</p>
         <p className="error" role="alert" hidden={!warning}>{warning}</p>
         <p className="operation-status" role="status" hidden={!busy || pending}>{initialized.current ? 'Updating workspace…' : 'Loading workspace…'}</p>
       </div>
-      <Composer disabled={busy || !ready} selected={ready} guest={guest} uploads={files.uploads} pending={uploading}
+      {limited && <div className="guest-limit" role="status">
+        <p><strong>You’ve used your free guest chat.</strong> Guest chat opens again 24 hours after the limit was reached. Log in or sign up to keep chatting now and save your conversations.</p>
+        <div><button type="button" className="primary-button" disabled={locked} onClick={() => endGuest(true)}>Sign up</button>
+          <button type="button" className="guest-button" disabled={locked} onClick={() => endGuest()}>Log in</button></div>
+      </div>}
+      <Composer disabled={busy || !ready || limited} selected={ready} guest={guest} limited={limited} uploads={files.uploads} pending={uploading}
         onSend={send} onUpload={upload} onRemove={remove} />
     </section>
   </main>;

@@ -7,9 +7,10 @@ A local-first AI chat workspace built with **Next.js, FastAPI, Deep Agents and P
 ## Features
 
 - **Accounts and saved conversations:** email/password registration, Argon2id password hashing, and account-scoped history with automatic titles, rename, pin and delete actions.
-- **Guest chat:** no registration required. Start as many temporary chats as needed; all of them and their files remain in server memory with no idle timeout until the tab closes, and refresh preserves them.
+- **Guest chat:** no registration required. A guest has one temporary chat at a time; starting a new chat deletes the current one and its files. Each browser has a hidden guest token budget (`GUEST_TOKEN_LIMIT`, default 50,000) shared by all its guest tabs; once it is used up, guest chat is blocked in that browser for 24 hours, even after closing the tab, unless the guest logs in or signs up.
 - **File context:** read DOCX, UTF-8 text and images with a vision-capable model, or any file type through optional LlamaParse. Upload multiple files and manage them independently.
 - **Edits and downloads:** keep uploaded originals, download text/DOCX revisions, and generate text, DOCX, PDF, XLSX, PPTX or ZIP files.
+- **Answer formats:** ask for a table, bullet points, steps, code, JSON, or a short or detailed answer in your message, or let the assistant pick what fits. Answers render as Markdown (tables, lists, code with copy) and can be exported as Markdown, Word or PDF from each answer's ⋯ menu.
 - **Optional web search:** Tavily evidence links alongside answers.
 - **Optional observability:** Langfuse tracing for account chats, with content redacted by default. Guest turns bypass the application's tracing integration.
 - **Responsive interface:** Aster landing page and chat workspace, light/dark themes, and locally served fonts with no external CDN dependency.
@@ -81,6 +82,7 @@ Only the frontend publishes a host port, bound to `127.0.0.1:18080`. FastAPI and
 | Chat history | Saved in PostgreSQL | Server memory only; never imported into accounts |
 | Access lifetime | 12-hour idle session; log in again after restart | No idle timeout; normally ends when the chat tab closes |
 | Uploaded/generated files | Saved in PostgreSQL with the conversation until removed | Temporary and isolated to the guest tab |
+| Conversations and usage | Unlimited saved conversations | One chat at a time; `GUEST_TOKEN_LIMIT` tokens per browser, then a 24-hour block |
 
 Closing a guest tab triggers **best-effort** cleanup with a 15-second refresh grace. Browser crashes, restored/duplicated tabs or blocked close requests can delay cleanup. Backend restarts clear all in-memory sessions and files, but not saved account history.
 

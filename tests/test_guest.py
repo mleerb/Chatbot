@@ -6,7 +6,8 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.services.auth import attempts
-from app.services.sessions import COOKIE, sessions
+from app.services import guest
+from app.services.sessions import COOKIE, GUEST_COOKIE, sessions
 from tests.fake_database import mock_database
 
 
@@ -14,6 +15,8 @@ class GuestTests(unittest.TestCase):
     def setUp(self):
         sessions.clear()
         attempts.clear()
+        guest.meters.clear()
+        self.addCleanup(guest.meters.clear)
         self.client = TestClient(app)
         self.addCleanup(self.client.close)
         self.addCleanup(sessions.clear)
@@ -21,6 +24,9 @@ class GuestTests(unittest.TestCase):
         self.title = patch('app.services.title.generate', return_value='')
         self.title.start()
         self.addCleanup(self.title.stop)
+        self.limit = patch('app.services.guest.GUEST_TOKEN_LIMIT', 100)
+        self.limit.start()
+        self.addCleanup(self.limit.stop)
         self.client.post('/api/auth/logout')
         self.no_database = ExitStack()
         for name in ('users', 'get_user', 'messages', 'conversations', 'create_user', 'create_conversation',
@@ -48,7 +54,10 @@ class GuestTests(unittest.TestCase):
         response = self.start_guest()
         self.assertNotEqual(before, response.json()['guest_token'])
         self.assertNotIn(before, sessions)
-        self.assertNotIn('set-cookie', response.headers)
+        cookie = response.headers.get('set-cookie', '')
+        self.assertTrue(cookie.startswith(f'{GUEST_COOKIE}='))
+        self.assertIn('HttpOnly', cookie)
+        self.assertNotIn(response.json()['guest_token'], cookie)
         self.assertEqual(self.send('First').status_code, 200)
         with patch('app.services.chat.make_agent'), patch('app.services.chat.answer_question', return_value='Second') as answer:
             self.client.post('/api/chat', json={'message': 'Continue'})
@@ -91,7 +100,7 @@ class GuestTests(unittest.TestCase):
         self.assertEqual(self.client.post('/api/users/1/select').status_code, 401)
         self.assertEqual(self.client.post('/api/conversations/1/select').status_code, 404)
 
-    def test_new_chat_keeps_previous_guest_chats_and_files(self):
+    def test_new_chat_replaces_previous_guest_chat_and_files(self):
         self.start_guest()
         self.client.post('/api/document', files={'file': ('note.txt', b'private')})
         self.send('First question')
@@ -100,40 +109,98 @@ class GuestTests(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
         second = response.json()['id']
         self.assertNotEqual(first, second)
-        self.assertEqual(response.json()['title'], 'Temporary chat 2')
+        self.assertEqual(response.json()['title'], 'Temporary chat')
         state = self.client.get('/api/state').json()
         self.assertEqual(state['messages'], [])
         self.assertEqual(state['uploads'], [])
-        self.assertEqual([chat['id'] for chat in state['conversations']], [second, first])
-        self.send('Second question')
-        self.assertEqual(self.client.post(f'/api/conversations/{first}/select').status_code, 200)
-        state = self.client.get('/api/state').json()
-        self.assertEqual(state['conversation_id'], first)
-        self.assertEqual(state['messages'][0]['content'], 'First question')
-        self.assertEqual([item['filename'] for item in state['uploads']], ['note.txt'])
-        self.assertEqual(self.client.get('/api/document/download').content, b'private')
-        self.client.post(f'/api/conversations/{second}/select')
-        state = self.client.get('/api/state').json()
-        self.assertEqual(state['messages'][0]['content'], 'Second question')
-        self.assertEqual(state['uploads'], [])
+        self.assertEqual([chat['id'] for chat in state['conversations']], [second])
+        self.assertEqual(self.client.post(f'/api/conversations/{first}/select').status_code, 404)
+        self.assertEqual(self.client.get('/api/document/download').status_code, 404)
+        self.assertEqual(len(sessions[self.client.headers['x-guest-session']].guest_chats), 1)
 
     def test_guest_chat_rename_pin_and_delete(self):
         self.start_guest()
         self.send('First question')
         first = self.client.get('/api/state').json()['conversation_id']
-        second = self.client.post('/api/conversations').json()['id']
-        self.assertEqual(self.client.patch(f'/api/conversations/{second}', json={'title': 'Renamed'}).json()['title'], 'Renamed')
-        self.assertEqual(self.client.patch(f'/api/conversations/{second}', json={'pinned': True}).status_code, 403)
-        self.assertEqual(self.client.delete(f'/api/conversations/{second}').status_code, 200)
-        state = self.client.get('/api/state').json()
-        self.assertEqual(state['conversation_id'], first)
-        self.assertEqual(state['messages'][0]['content'], 'First question')
-        self.assertEqual(self.client.post(f'/api/conversations/{second}/select').status_code, 404)
+        self.assertEqual(self.client.patch(f'/api/conversations/{first}', json={'title': 'Renamed'}).json()['title'], 'Renamed')
+        self.assertEqual(self.client.patch(f'/api/conversations/{first}', json={'pinned': True}).status_code, 403)
         self.assertEqual(self.client.delete(f'/api/conversations/{first}').status_code, 200)
         state = self.client.get('/api/state').json()
         self.assertEqual(state['conversations'], [])
         self.assertIsNone(state['conversation_id'])
         self.assertEqual(state['messages'], [])
+        self.assertEqual(self.client.post(f'/api/conversations/{first}/select').status_code, 404)
+
+    def use_tokens(self, tokens, client=None):
+        def answer(*args, usage, **kwargs):
+            usage.append(tokens)
+            return 'Answer'
+
+        with patch('app.services.chat.make_agent'), patch('app.services.chat.answer_question', side_effect=answer):
+            return (client or self.client).post('/api/chat', json={'message': 'Question'})
+
+    def meter(self, client=None):
+        return guest.meters[sessions[(client or self.client).headers['x-guest-session']].guest_meter]
+
+    def test_guest_token_limit_blocks_chat_and_uploads(self):
+        self.start_guest()
+        self.assertFalse(self.client.get('/api/state').json()['guest_limited'])
+        response = self.use_tokens(60)
+        self.assertFalse(response.json()['guest_limited'])
+        self.assertNotIn('guest_usage', response.json())
+        self.assertTrue(self.use_tokens(60).json()['guest_limited'])
+        blocked = self.use_tokens(60)
+        self.assertEqual(blocked.status_code, 403)
+        self.assertEqual(blocked.json()['detail'], guest.LIMIT_MESSAGE)
+        self.assertEqual(self.client.post('/api/document', files={'file': ('note.txt', b'x')}).status_code, 403)
+        self.client.post('/api/conversations')
+        self.assertTrue(self.client.get('/api/state').json()['guest_limited'])
+        self.assertEqual(self.meter().tokens, 120)
+
+    def test_guest_limit_survives_closing_the_tab_for_24_hours(self):
+        self.start_guest()
+        self.use_tokens(100)
+        self.assertTrue(self.client.get('/api/state').json()['guest_limited'])
+        with patch('app.services.auth.threading.Timer') as timer_class:
+            self.client.post('/api/auth/guest/close')
+            timer_class.call_args.args[1]()
+        del self.client.headers['x-guest-session']
+        self.start_guest()
+        self.assertTrue(self.client.get('/api/state').json()['guest_limited'])
+        self.assertEqual(self.use_tokens(1).status_code, 403)
+        self.client.post('/api/auth/logout')
+        del self.client.headers['x-guest-session']
+        self.start_guest()
+        self.assertTrue(self.client.get('/api/state').json()['guest_limited'])
+        blocked_until = self.meter().blocked_until
+        with patch('app.services.guest.time.time', return_value=blocked_until - 1):
+            self.assertTrue(self.client.get('/api/state').json()['guest_limited'])
+        with patch('app.services.guest.time.time', return_value=blocked_until):
+            self.assertFalse(self.client.get('/api/state').json()['guest_limited'])
+            self.assertEqual(self.meter().tokens, 0)
+            self.assertEqual(self.use_tokens(10).status_code, 200)
+
+    def test_guest_limit_is_per_browser(self):
+        self.start_guest()
+        self.use_tokens(100)
+        with TestClient(app) as other:
+            self.start_guest(other)
+            self.assertFalse(other.get('/api/state').json()['guest_limited'])
+            other.cookies.set(GUEST_COOKIE, self.client.cookies[GUEST_COOKIE])
+            other.post('/api/auth/logout')
+            del other.headers['x-guest-session']
+            self.start_guest(other)
+            self.assertTrue(other.get('/api/state').json()['guest_limited'])
+
+    def test_guest_cookie_ignores_invalid_values(self):
+        self.client.cookies.set(GUEST_COOKIE, 'bad value!')
+        self.start_guest()
+        self.assertNotEqual(sessions[self.client.headers['x-guest-session']].guest_meter, 'bad value!')
+
+    def test_guest_usage_falls_back_to_estimate(self):
+        self.start_guest()
+        self.send('12345678')
+        self.assertEqual(self.meter().tokens, 4)
 
     def test_no_idle_expiry_and_logout_revokes_guest_history(self):
         self.start_guest()
@@ -201,6 +268,21 @@ class GuestTests(unittest.TestCase):
             self.assertEqual(answer_question(agent, 'Question', [], 'guest', trace=False), 'Answer')
             trace.assert_not_called()
             self.assertIsNone(agent.invoke.call_args.kwargs['config'])
+
+    def test_answer_reports_model_token_usage(self):
+        from unittest.mock import Mock
+        from app.services.agent import answer_question
+
+        agent = Mock()
+        agent.invoke.return_value = {'messages': [
+            Mock(content='Question', usage_metadata=None),
+            Mock(content='', usage_metadata={'total_tokens': 30}),
+            Mock(content='Answer', usage_metadata={'total_tokens': 12}),
+        ]}
+        usage = []
+        with patch('app.services.agent.conversation_messages', return_value=[]):
+            self.assertEqual(answer_question(agent, 'Question', [], 'guest', trace=False, usage=usage), 'Answer')
+        self.assertEqual(usage, [42])
 
     def test_failed_model_turn_does_not_add_guest_messages(self):
         self.start_guest()

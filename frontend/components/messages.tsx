@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react';
 import { safeUrl, type Message, type Upload } from '../lib/api';
+import AnswerMenu from './answer-menu';
 import Brand from './brand';
 import { MessageFiles } from './files';
 import Logo from './logo';
+import Markdown from './markdown';
 
 export default function Messages({ messages, uploads, pending, selected, children }: {
   messages: Message[];
@@ -20,9 +22,10 @@ export default function Messages({ messages, uploads, pending, selected, childre
     </section>}
     <div className="messages" role="log" aria-live="polite" aria-label="Chat messages" aria-busy={pending}>
       {messages.map((message, index) => <article className={`message ${message.role}`} key={index}>
-        <span className="message-author">{message.role === 'assistant' && <span className="message-avatar"><Logo /></span>}{message.role === 'user' ? 'You' : 'Aster'}</span>
+        <span className="message-author">{message.role === 'assistant' && <span className="message-avatar"><Logo /></span>}{message.role === 'user' ? 'You' : 'Aster'}
+          {message.role === 'assistant' && <AnswerMenu content={message.content} index={index} />}</span>
         {!!message.attachments?.length && <MessageFiles attachments={message.attachments} uploads={uploads} />}
-        <div className="message-body">{message.content}</div>
+        {message.role === 'assistant' ? <Markdown content={message.content} /> : <div className="message-body">{message.content}</div>}
         {!!message.sources?.length && <div className="sources">
           <span>Sources</span>
           {message.sources.map((source, index) => {

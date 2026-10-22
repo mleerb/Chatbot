@@ -2,13 +2,14 @@ import { guestToken } from './guest';
 
 export type Source = { title: string; url: string };
 export type DownloadInfo = { id: string; filename: string };
+export type ExportFormat = 'md' | 'docx' | 'pdf';
 export type Message = { role: 'user' | 'assistant'; content: string; sources?: Source[]; attachments?: DownloadInfo[] };
 export type User = { id: number; name: string; email?: string };
 export type Conversation = { id: number; user_id: number; title: string; pinned: boolean };
 export type Upload = DownloadInfo & { status: string; sent: boolean; edits: DownloadInfo[] };
 export type Files = { uploads: Upload[]; generated_files: DownloadInfo[] };
-export type State = Files & { user_id: number | null; conversation_id: number | null; conversations: Conversation[]; messages: Message[] };
-export type Reply = Files & { answer: string; display_answer: string; sources: Source[] };
+export type State = Files & { user_id: number | null; conversation_id: number | null; conversations: Conversation[]; messages: Message[]; guest_limited?: boolean };
+export type Reply = Files & { answer: string; display_answer: string; sources: Source[]; guest_limited?: boolean };
 
 export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Request failed';
@@ -22,6 +23,22 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
   const data = await response.json().catch(() => null);
   if (!response.ok) throw new Error(typeof data?.detail === 'string' ? data.detail : 'Request failed');
   return data as T;
+}
+
+export async function exportAnswer(content: string, format: ExportFormat) {
+  const headers = new Headers({ 'Content-Type': 'application/json' });
+  const guest = guestToken();
+  if (guest) headers.set('x-guest-session', guest);
+  const response = await fetch('/api/export', {
+    method: 'POST', credentials: 'same-origin', cache: 'no-store', headers, body: JSON.stringify({ content, format }),
+  });
+  if (!response.ok) throw new Error('Could not export this answer');
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `aster-answer.${format}`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export function safeUrl(value: string): string | null {

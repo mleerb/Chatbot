@@ -28,6 +28,7 @@ class ChatResponse(BaseModel):
     sources: list[Source]
     uploads: list[UploadResponse]
     generated_files: list[DownloadInfo]
+    guest_limited: bool = False
 
 
 class StateResponse(BaseModel):
@@ -37,3 +38,4 @@ class StateResponse(BaseModel):
     messages: list[Message]
     uploads: list[UploadResponse]
     generated_files: list[DownloadInfo]
+    guest_limited: bool = False

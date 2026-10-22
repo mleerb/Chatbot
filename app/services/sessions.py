@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from uuid import uuid4
 
 COOKIE = "chat_session"
+GUEST_COOKIE = "aster_guest"
 SESSION_TTL = 60 * 60 * 12
 GUEST_CLOSE_DELAY = 15
 MAX_SESSIONS = 100
@@ -65,6 +66,7 @@ class ChatSession:
     user_id: int | None = None
     account: dict | None = None
     guest: bool = False
+    guest_meter: str | None = None
     close_timer: threading.Timer | None = field(default=None, repr=False)
     guest_chats: dict[int, GuestChat] = field(default_factory=dict)
     parsed: dict[str, list[tuple[int, str]]] = field(default_factory=dict)
@@ -99,6 +101,7 @@ class ChatSession:
         self.user_id = None
         self.account = None
         self.guest = False
+        self.guest_meter = None
         self.conversation_id = None
         self.history.clear()
         self.uploads.clear()

@@ -21,6 +21,8 @@ class PromptTests(unittest.TestCase):
         self.assertIn("untrusted user-provided data", render_prompt("system.j2"))
         self.assertIn("create_text_file", render_prompt("system.j2"))
         self.assertIn("edit_uploaded_file", render_prompt("system.j2"))
+        self.assertIn("Choose the format from the\nuser's request", render_prompt("system.j2"))
+        self.assertIn("Markdown", render_prompt("system.j2"))
         self.assertIn("Never send file", render_prompt("system.j2"))
 
     def test_document_template_renders_all_text_literally(self):

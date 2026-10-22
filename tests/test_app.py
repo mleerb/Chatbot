@@ -31,7 +31,7 @@ class AppTests(unittest.TestCase):
             "/api/state", "/api/chat", "/api/document", "/api/document/download",
             "/api/document/edited", "/api/users", "/api/users/{user_id}/select",
             "/api/users/{user_id}/messages", "/api/files/download", "/api/conversations",
-            "/api/conversations/{conversation_id}", "/api/conversations/{conversation_id}/select",
+            "/api/conversations/{conversation_id}", "/api/conversations/{conversation_id}/select", "/api/export",
         })
         chat = schema["paths"]["/api/chat"]["post"]
         self.assertEqual(chat["responses"]["200"]["content"]["application/json"]["schema"],
