@@ -16,6 +16,9 @@ class UploadTests(unittest.TestCase):
         sessions.clear()
         self.client = TestClient(app)
         mock_database(self)
+        self.title = patch('app.services.title.generate', return_value='')
+        self.title.start()
+        self.addCleanup(self.title.stop)
         self.client.get('/api/state')
         self.token = self.client.cookies.get('chat_session')
 
@@ -81,8 +84,8 @@ class UploadTests(unittest.TestCase):
         second = self.upload('b.txt', b'second')
         with TestClient(app) as other:
             other.post('/api/auth/login', json={'email': 'tester@example.com', 'password': 'test-password-123'})
-            for path in ('/api/document/download', '/api/document/edited'):
-                self.assertEqual(other.get(path, params={'file_id': first['id']}).status_code, 404)
+            self.assertEqual(other.get('/api/document/download', params={'file_id': first['id']}).content, b'first')
+            self.assertEqual(other.get('/api/document/edited', params={'file_id': first['id']}).status_code, 404)
         self.assertEqual(self.client.delete('/api/document', params={'file_id': first['id']}).status_code, 200)
         self.assertEqual(self.client.get('/api/document/download', params={'file_id': first['id']}).status_code, 404)
         self.assertEqual(self.client.get('/api/document/download', params={'file_id': second['id']}).content, b'second')
@@ -116,7 +119,7 @@ class UploadTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/files/download', params={'file_id': 'missing'}).status_code, 404)
         with TestClient(app) as other:
             other.post('/api/auth/login', json={'email': 'tester@example.com', 'password': 'test-password-123'})
-            self.assertEqual(other.get('/api/files/download', params={'file_id': files[0]['id']}).status_code, 404)
+            self.assertEqual(other.get('/api/files/download', params={'file_id': files[0]['id']}).content, b'0')
         self.client.post('/api/auth/register', json={'name': 'Another', 'email': 'another@example.com', 'password': 'test-password-123'})
         state = self.client.get('/api/state').json()
         self.assertEqual(state['generated_files'], [])

@@ -3,6 +3,7 @@ from pathlib import Path
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
+from app.services import storage
 from app.services.sessions import Download, sessions, sessions_lock
 from app.core.file_types import TEXT_EXTENSIONS
 from app.formats import GENERATORS
@@ -40,6 +41,10 @@ def create_file_tool(token: str):
         if session is None:
             return "Session expired; file was not created."
         item = Download(name, data)
+        try:
+            storage.save_generated(session, item)
+        except Exception:
+            return "Could not save the file; it was not created."
         session.generated[item.id] = item
         return f"Created downloadable file: {name} (file_id={item.id})"
 

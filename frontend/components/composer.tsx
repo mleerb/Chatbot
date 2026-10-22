@@ -6,20 +6,24 @@ import Icon from './icon';
 type Props = {
   disabled: boolean;
   selected: boolean;
+  guest: boolean;
   uploads: Upload[];
+  pending: string[];
   onSend: (message: string) => Promise<void>;
   onUpload: (files: File[]) => Promise<void>;
-  onRemove: (id: string) => Promise<void>;
+  onRemove: (id?: string) => Promise<void>;
 };
 
-export default function Composer({ disabled, selected, uploads, onSend, onUpload, onRemove }: Props) {
+export default function Composer({ disabled, selected, guest, uploads, pending, onSend, onUpload, onRemove }: Props) {
+  const uploading = pending.length > 0;
+  const unsent = uploads.filter(file => !file.sent);
   const [message, setMessage] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   async function submit(event: FormEvent) {
     event.preventDefault();
     const question = message.trim();
-    if (disabled || !question) return;
+    if (disabled || uploading || !question) return;
     setMessage('');
     if (input.current) input.current.style.height = '';
     await onSend(question);
@@ -33,7 +37,7 @@ export default function Composer({ disabled, selected, uploads, onSend, onUpload
   }
   return <div className="composer-area">
     <form className="composer" onSubmit={submit}>
-      <AttachedFiles uploads={uploads} disabled={disabled} onRemove={onRemove} />
+      <AttachedFiles uploads={unsent} pending={pending} disabled={disabled || uploading} onRemove={onRemove} />
       <label htmlFor="message" className="sr-only">Your message</label>
       <textarea ref={input} id="message" name="message" placeholder={selected ? 'Message Aster…' : 'Log in to start chatting'}
         rows={2} maxLength={10000} required disabled={disabled} value={message} onKeyDown={keyDown}
@@ -43,19 +47,19 @@ export default function Composer({ disabled, selected, uploads, onSend, onUpload
           event.currentTarget.style.height = `${Math.min(event.currentTarget.scrollHeight, 180)}px`;
         }} />
       <div className="composer-toolbar">
-        <input ref={fileInput} type="file" aria-label="Choose files" multiple hidden disabled={disabled}
+        <input ref={fileInput} type="file" aria-label="Choose files" multiple hidden disabled={disabled || uploading}
           onChange={event => {
             const files = Array.from(event.currentTarget.files || []);
             event.currentTarget.value = '';
             if (files.length) void onUpload(files);
           }} />
-        <button type="button" className="attach-button" aria-label="Attach files" disabled={disabled}
+        <button type="button" className="attach-button" aria-label="Attach files" disabled={disabled || uploading}
           onClick={() => fileInput.current?.click()}><Icon name="attach" /><span>Attach files</span></button>
-        <button type="submit" className="send-button" aria-label="Send message" disabled={disabled || !message.trim()}>
-          <Icon name="send" /><span>Send</span>
+        <button type="submit" className="send-button" aria-label="Send message" disabled={disabled || uploading || !message.trim()}>
+          <Icon name="send" /><span>{uploading ? 'Uploading…' : 'Send'}</span>
         </button>
       </div>
     </form>
-    <p className="composer-note">{uploads.length ? `${uploads.length} ${uploads.length === 1 ? 'file is' : 'files are'} available to this chat. Files are temporary.` : 'AI can make mistakes. Review important information.'}</p>
+    <p className="composer-note">{uploading ? 'You can keep typing while files upload.' : unsent.length ? `${unsent.length} ${unsent.length === 1 ? 'file' : 'files'} will be sent with your message. ${guest ? 'Guest files last while this tab is open.' : 'Files are saved with this conversation.'}` : 'AI can make mistakes. Review important information.'}</p>
   </div>;
 }

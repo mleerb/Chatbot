@@ -23,6 +23,12 @@ class Download:
         return {"id": self.id, "filename": self.filename}
 
 
+@dataclass(frozen=True)
+class Page:
+    label: str
+    text: str
+
+
 @dataclass
 class Upload:
     filename: str
@@ -32,14 +38,26 @@ class Upload:
     status: str
     id: str = field(default_factory=file_id)
     edits: list[Download] = field(default_factory=list)
+    pages: list[Page] = field(default_factory=list)
+    sent: bool = False
 
     def summary(self) -> dict:
         return {
             "id": self.id,
             "filename": self.filename,
             "status": self.status,
+            "sent": self.sent,
             "edits": [edit.summary() for edit in self.edits],
         }
+
+
+@dataclass
+class GuestChat:
+    conversation: dict
+    named: bool = False
+    messages: list[dict] = field(default_factory=list)
+    uploads: dict[str, Upload] = field(default_factory=dict)
+    generated: dict[str, Download] = field(default_factory=dict)
 
 
 @dataclass
@@ -48,8 +66,8 @@ class ChatSession:
     account: dict | None = None
     guest: bool = False
     close_timer: threading.Timer | None = field(default=None, repr=False)
-    guest_messages: list[dict] = field(default_factory=list)
-    guest_conversation: dict | None = None
+    guest_chats: dict[int, GuestChat] = field(default_factory=dict)
+    parsed: dict[str, list[tuple[int, str]]] = field(default_factory=dict)
     conversation_id: int | None = None
     history: list[dict] = field(default_factory=list)
     uploads: dict[str, Upload] = field(default_factory=dict)
@@ -82,11 +100,16 @@ class ChatSession:
         self.account = None
         self.guest = False
         self.conversation_id = None
-        self.guest_conversation = None
         self.history.clear()
-        self.guest_messages.clear()
         self.uploads.clear()
         self.generated.clear()
+        for chat in self.guest_chats.values():
+            chat.uploads.clear()
+            chat.generated.clear()
+        self.guest_chats.clear()
+        self.parsed.clear()
+        self.uploads = {}
+        self.generated = {}
 
 
 sessions: dict[str, ChatSession] = {}

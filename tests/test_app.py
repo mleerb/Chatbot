@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.dependencies import session_for
 from app.main import create_app
-from app.services.sessions import COOKIE, SESSION_TTL, ChatSession, Upload, sessions
+from app.services.sessions import COOKIE, SESSION_TTL, ChatSession, GuestChat, Upload, sessions
 
 
 class AppTests(unittest.TestCase):
@@ -72,8 +72,8 @@ class AppTests(unittest.TestCase):
         item = Upload("temporary.txt", b"private", "private", "", "Ready")
         session = ChatSession(
             user_id=1, account={"id": 1}, guest=True, close_timer=timer,
-            conversation_id=2, guest_conversation={"id": 2},
-            history=[{"content": "private"}], guest_messages=[{"content": "private"}],
+            conversation_id=2, guest_chats={2: GuestChat({"id": 2}, [{"content": "private"}])},
+            history=[{"content": "private"}],
             uploads={item.id: item}, generated={"temporary": Mock()},
         )
         session.clear()
@@ -84,9 +84,8 @@ class AppTests(unittest.TestCase):
         self.assertIsNone(session.account)
         self.assertFalse(session.guest)
         self.assertIsNone(session.conversation_id)
-        self.assertIsNone(session.guest_conversation)
         self.assertEqual(session.history, [])
-        self.assertEqual(session.guest_messages, [])
+        self.assertEqual(session.guest_chats, {})
         self.assertEqual(session.file_state(), {"uploads": [], "generated_files": []})
 
     def test_session_capacity_returns_service_unavailable(self):

@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from 'react';
 import { errorMessage, request, type User } from '../lib/api';
 import Brand from './brand';
+import Logo from './logo';
 
 export default function Auth({ onSuccess, onGuest }: { onSuccess: (user: User) => Promise<void>; onGuest: () => Promise<void> }) {
   const [register, setRegister] = useState(false);
@@ -34,7 +35,7 @@ export default function Auth({ onSuccess, onGuest }: { onSuccess: (user: User) =
   return <section className="auth-screen" aria-labelledby="auth-title">
     <a href="/" className="auth-home"><Brand /></a>
     <div className="auth-card">
-      <span className="auth-symbol" aria-hidden="true">✳</span>
+      <span className="auth-symbol"><Logo className="logo-intro" /></span>
       <h1 id="auth-title">{register ? 'A space of your own.' : 'Welcome back.'}</h1>
       <p>{register ? 'Create an account to start with Aster.' : 'Log in to pick up your conversation.'}</p>
       <form onSubmit={submit}>

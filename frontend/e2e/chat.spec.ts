@@ -18,17 +18,20 @@ test('users, multi-upload, revisions, downloads, theme and session isolation', a
     { name: 'note.txt', mimeType: 'text/plain', buffer: Buffer.from('old') },
     { name: 'other.txt', mimeType: 'text/plain', buffer: Buffer.from('other') },
   ]);
-  await expect(page.locator('.file-item')).toHaveCount(2);
+  await expect(page.locator('.attachment:not(.pending)')).toHaveCount(2);
   await expect(page.getByLabel('Active attachments').locator('.attachment')).toHaveCount(2);
-  await expect(page.locator('.sidebar .file-item')).toHaveCount(0);
+  await expect(page.locator('.sidebar .attachment')).toHaveCount(0);
   await page.reload();
-  await expect(page.locator('.file-item')).toHaveCount(2);
+  await expect(page.locator('.attachment:not(.pending)')).toHaveCount(2);
   await expect(page.locator('.account-info')).toContainText('Tester');
   for (let version = 1; version <= 2; version++) {
     await page.getByLabel('Your message').fill('Edit note.txt');
     await page.getByRole('button', { name: 'Send', exact: false }).click();
     await expect(page.getByRole('link', { name: `Edited v${version}`, exact: true })).toBeVisible();
+    await expect(page.locator('.composer .attachment')).toHaveCount(0);
   }
+  await expect(page.locator('.message.user').first().locator('.attachment')).toHaveCount(2);
+  await expect(page.locator('.message.user').nth(1).locator('.attachment')).toHaveCount(0);
   await expect(page.getByLabel('Generated files').getByRole('link')).toHaveCount(2);
   expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true);
   await page.screenshot({ path: 'test-results/files-light.png', fullPage: true, animations: 'disabled' });
@@ -47,10 +50,13 @@ test('users, multi-upload, revisions, downloads, theme and session isolation', a
   const otherPage = await other.newPage();
   await otherPage.goto('/chat');
   await expect(otherPage.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
-  await expect(otherPage.locator('.file-item')).toHaveCount(0);
+  await expect(otherPage.locator('.attachment:not(.pending)')).toHaveCount(0);
   await other.close();
-  await page.locator('.file-item').first().getByRole('button', { name: 'Remove file', exact: true }).click();
-  await expect(page.locator('.file-item')).toHaveCount(1);
+  await page.getByLabel('Choose files').setInputFiles({ name: 'extra.txt', mimeType: 'text/plain', buffer: Buffer.from('extra') });
+  await expect(page.locator('.composer .attachment')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Remove extra.txt', exact: true }).click();
+  await expect(page.locator('.composer .attachment')).toHaveCount(0);
+  await expect(page.locator('.message.user').first().locator('.attachment')).toHaveCount(2);
   await page.getByRole('button', { name: 'Log out', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
   await page.getByRole('button', { name: 'New here? Create an account' }).click();
@@ -59,7 +65,7 @@ test('users, multi-upload, revisions, downloads, theme and session isolation', a
   await page.getByLabel('Password', { exact: true }).fill('test-password-123');
   await page.getByRole('button', { name: 'Create account', exact: true }).click();
   await expect(page.locator('.account-info')).toContainText('New tester');
-  await expect(page.locator('.file-item')).toHaveCount(0);
+  await expect(page.locator('.attachment:not(.pending)')).toHaveCount(0);
   await page.screenshot({ path: 'test-results/desktop-dark.png', fullPage: true, animations: 'disabled' });
   await page.getByRole('button', { name: 'Switch to light theme' }).click();
   await page.screenshot({ path: 'test-results/desktop-light.png', fullPage: true, animations: 'disabled' });
@@ -69,9 +75,10 @@ test('users, multi-upload, revisions, downloads, theme and session isolation', a
 test('chat errors keep attachments and allow retry', async ({ page }) => {
   await page.goto('/chat');
   await login(page);
+  await page.getByRole('button', { name: '+ New conversation', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Attach files' })).toBeEnabled();
   await page.getByLabel('Choose files').setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('notes') });
-  await expect(page.locator('.file-item')).toHaveCount(1);
+  await expect(page.locator('.attachment:not(.pending)')).toHaveCount(1);
   await page.route('**/api/chat', route => route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ detail: 'The model is unavailable. Check model settings and retry.' }) }));
   await page.getByLabel('Your message').fill('Review my file');
   await page.getByRole('button', { name: 'Send message' }).click();
@@ -171,7 +178,7 @@ test('mobile layout keeps composer reachable', async ({ page }) => {
     { name: 'A long document name for the mobile layout.txt', mimeType: 'text/plain', buffer: Buffer.from('notes') },
     { name: 'second.txt', mimeType: 'text/plain', buffer: Buffer.from('notes') },
   ]);
-  await expect(page.locator('.file-item')).toHaveCount(2);
+  await expect(page.locator('.attachment:not(.pending)')).toHaveCount(2);
   await expect(page.getByLabel('Your message')).toBeInViewport();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/mobile-files.png', fullPage: true, animations: 'disabled' });
@@ -181,4 +188,53 @@ test('mobile layout keeps composer reachable', async ({ page }) => {
   await page.getByLabel('Your message').fill('First line');
   await page.getByLabel('Your message').press('Shift+Enter');
   await expect(page.getByLabel('Your message')).toHaveValue('First line\n');
+});
+
+test('typing while uploading, compact chips and saved account files', async ({ page }) => {
+  await page.goto('/chat');
+  await login(page);
+  await page.getByRole('button', { name: '+ New conversation', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Attach files' })).toBeEnabled();
+  await page.getByLabel('Choose files').setInputFiles({ name: 'slow-report.txt', mimeType: 'text/plain', buffer: Buffer.from('report') });
+  await expect(page.locator('.attachment.pending')).toContainText('slow-report.txt');
+  await page.getByLabel('Your message').fill('Summarize the report');
+  await expect(page.getByLabel('Your message')).toHaveValue('Summarize the report');
+  await expect(page.getByRole('button', { name: 'Send message' })).toBeDisabled();
+  await expect(page.locator('.attachment.pending')).toHaveCount(0);
+  await expect(page.getByLabel('Active attachments').locator('.attachment')).toHaveCount(1);
+  await expect(page.locator('.conversation-scroll .attachment')).toHaveCount(0);
+  const chip = await page.getByLabel('Active attachments').locator('.attachment').boundingBox();
+  const box = await page.locator('.composer textarea').boundingBox();
+  expect(chip!.height).toBeLessThanOrEqual(32);
+  expect(chip!.y + chip!.height).toBeLessThanOrEqual(box!.y);
+  await expect(page.getByRole('button', { name: 'Send message' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Send message' }).click();
+  await expect(page.locator('.message.user')).toContainText('Summarize the report');
+  await expect(page.locator('.message.user .attachment')).toContainText('slow-report.txt');
+  await expect(page.locator('.composer .attachment')).toHaveCount(0);
+  await page.screenshot({ path: 'test-results/message-files.png', animations: 'disabled' });
+  await page.getByRole('button', { name: 'Log out', exact: true }).click();
+  await login(page);
+  await page.getByRole('button', { name: 'Summarize the report', exact: true }).click();
+  await expect(page.locator('.message.user').first().locator('.attachment')).toContainText('slow-report.txt');
+  await expect(page.locator('.composer .attachment')).toHaveCount(0);
+});
+
+test('desktop sidebar collapses, widens the workspace and remembers the choice', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 860 });
+  await page.goto('/chat');
+  await login(page);
+  const panel = page.locator('.chat-panel');
+  const before = (await panel.boundingBox())!.width;
+  await expect(page.getByRole('button', { name: 'Open sidebar' })).toBeHidden();
+  await page.getByRole('button', { name: 'Close sidebar' }).click();
+  await expect(page.locator('#sidebar')).toBeHidden();
+  await expect.poll(async () => (await panel.boundingBox())!.width).toBeGreaterThan(before + 200);
+  await page.reload();
+  await expect(page.getByLabel('Your message')).toBeVisible();
+  await expect(page.locator('#sidebar')).toBeHidden();
+  await page.getByRole('button', { name: 'Open sidebar' }).click();
+  await expect(page.locator('#sidebar')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Open sidebar' })).toBeHidden();
+  await page.screenshot({ path: 'test-results/sidebar-open.png', animations: 'disabled' });
 });

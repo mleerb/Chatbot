@@ -1,4 +1,5 @@
 from app.prompts import render_prompt
+from app.services.pages import estimate_tokens, is_large
 from app.services.sessions import Upload
 
 MAX_HISTORY_MESSAGES = 12
@@ -23,7 +24,13 @@ def conversation_messages(question: str, history: list[dict],
             "role": "user",
             "content": render_prompt("upload.j2", upload_name=item.filename, file_id=item.id),
         })
-        if item.document:
+        if item.document and is_large(item):
+            messages.append({
+                "role": "user",
+                "content": render_prompt("large_file.j2", upload_name=item.filename, file_id=item.id,
+                                         page_count=len(item.pages), tokens=estimate_tokens(item.document)),
+            })
+        elif item.document:
             messages.append({
                 "role": "user",
                 "content": render_prompt("document.j2", document_text=item.document),

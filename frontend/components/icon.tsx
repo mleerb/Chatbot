@@ -1,4 +1,4 @@
-type Name = 'file' | 'attach' | 'send' | 'menu' | 'close' | 'sun' | 'moon' | 'chat' | 'download' | 'pin' | 'edit' | 'trash' | 'more';
+type Name = 'file' | 'attach' | 'send' | 'menu' | 'close' | 'sun' | 'moon' | 'chat' | 'download' | 'pin' | 'edit' | 'trash' | 'more' | 'sidebar';
 
 const paths: Record<Name, string> = {
   file: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M8 13h8 M8 17h5',
@@ -13,6 +13,7 @@ const paths: Record<Name, string> = {
   pin: 'm16 3 5 5-4 1-4 4-1 4-5-5 4-1 4-4z M8 16l-5 5',
   edit: 'm15 5 4 4 M4 20l4-1L20 7a3 3 0 0 0-4-4L4 15z',
   trash: 'M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15 M10 10v7 M14 10v7',
+  sidebar: 'M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z M9 4v16',
   more: 'M5 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2 M12 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2 M19 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2',
 };
 

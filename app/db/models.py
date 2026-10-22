@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Identity, Index, Integer, JSON, Text, func, text
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Identity, Index, Integer, JSON, LargeBinary, Text, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -56,5 +56,30 @@ class Message(Base):
     role: Mapped[str] = mapped_column(Text)
     content: Mapped[str] = mapped_column(Text)
     sources: Mapped[list[dict[str, str]]] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), server_default=text("'[]'"))
+    attachments: Mapped[list[dict[str, str]]] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), server_default=text("'[]'"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ChatFile(Base):
+    __tablename__ = "chat_files"
+    __table_args__ = (
+        CheckConstraint("kind IN ('upload', 'revision', 'generated')", name="chat_files_kind_check"),
+        Index("chat_files_conversation_id_id", "conversation_id", "id"),
+    )
+
+    id: Mapped[int] = mapped_column(identifier, Identity(always=True), primary_key=True)
+    file_id: Mapped[str] = mapped_column(Text, unique=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("chat_users.id", ondelete="CASCADE"))
+    conversation_id: Mapped[int] = mapped_column(ForeignKey("chat_conversations.id", ondelete="CASCADE"))
+    parent_id: Mapped[str | None] = mapped_column(ForeignKey("chat_files.file_id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(Text)
+    filename: Mapped[str] = mapped_column(Text)
+    data: Mapped[bytes] = mapped_column(LargeBinary)
+    document: Mapped[str] = mapped_column(Text, server_default="")
+    image_url: Mapped[str] = mapped_column(Text, server_default="")
+    status: Mapped[str] = mapped_column(Text, server_default="")
+    pages: Mapped[list[list[str]]] = mapped_column(
         JSON().with_variant(JSONB, "postgresql"), server_default=text("'[]'"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

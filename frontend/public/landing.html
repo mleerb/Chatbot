@@ -6,6 +6,7 @@
   <meta name="description" content="Aster is an AI workspace for questions, writing, planning, and working with your files. Start with a thought and work toward something useful.">
   <meta name="theme-color" content="#ece6fa">
   <title>Aster — A little clarity. A lot of possibility.</title>
+  <link rel="icon" href="logo.svg" type="image/svg+xml">
   <script>
     (() => {
       let saved;
@@ -27,7 +28,7 @@
       --bubble-ai: #2a2145; --bubble-ai-text: #ffffff;
       --bubble-user: rgba(255,255,255,.7);
       --shadow: 0 20px 50px rgba(90,60,160,.18);
-      --gradient-start: #8b5cf6; --gradient-mid: #c4b5fd; --gradient-end: #a78bfa;
+      --gradient-start: #6d3fd6; --gradient-mid: #9466f0; --gradient-end: #8b5cf6;
       --white: #ffffff; --clear: transparent; --focus: #5931ab;
       --primary-start: #6940c5; --primary-end: #7750cc; --primary-text: #ffffff;
       --line: rgba(90,60,160,.13); --soft-panel: rgba(255,255,255,.32);
@@ -37,23 +38,28 @@
       --success: #357664; --code-bg: #201a34; --code-text: #e9e2fc;
       --code-keyword: #c4b5fd; --code-string: #f3b9d4; --code-function: #a9e3cc;
       --ai-muted: #c5badd; --ai-line: rgba(255,255,255,.16);
+      --star-glow: rgba(139,92,246,.45); --sheen: rgba(255,255,255,.55);
+      --logo-ring: #9f7ef0; --logo-moon: #e58fc7; --planet-light: #f1e9ff; --planet-base: #ad86ec; --planet-shade: #5b33b5;
     }
     [data-theme="dark"] {
       color-scheme: dark;
-      --bg-1: #120d1f; --bg-2: #1e1535; --surface: #1a1330;
-      --glass: rgba(40,30,70,.45); --glass-border: rgba(255,255,255,.12);
+      --bg-1: #1f1934; --bg-2: #2d2450; --surface: #28203f;
+      --glass: rgba(70,56,118,.42); --glass-border: rgba(255,255,255,.16);
       --accent: #a78bfa; --accent-2: #c4b5fd;
+      --gradient-start: #a78bfa; --gradient-mid: #d6c8fe; --gradient-end: #b49af6;
       --ink: #f1ecff; --ink-soft: #b0a6cf;
-      --bubble-ai: #2d2350; --bubble-ai-text: #f1ecff;
-      --bubble-user: rgba(255,255,255,.08);
-      --shadow: 0 20px 50px rgba(0,0,0,.5);
+      --bubble-ai: #3a2f63; --bubble-ai-text: #f1ecff;
+      --bubble-user: rgba(255,255,255,.1);
+      --shadow: 0 20px 50px rgba(8,4,20,.42);
       --focus: #c4b5fd; --primary-start: #b49af6; --primary-end: #c4b5fd; --primary-text: #231a3a;
-      --line: rgba(196,181,253,.16); --soft-panel: rgba(196,181,253,.05);
-      --blob-one: #50317b; --blob-two: #303c83; --blob-three: #64366f;
+      --line: rgba(196,181,253,.2); --soft-panel: rgba(196,181,253,.07);
+      --blob-one: #6a45a6; --blob-two: #44529f; --blob-three: #82488f;
       --orb-base: #7651c7; --orb-shade: #35205c; --orb-light: #e4d4ff;
-      --orb-glow: rgba(139,92,246,.32); --noise-opacity: .055;
-      --success: #a9e3cc; --code-bg: #1b152d; --code-text: #e9e2fc;
+      --orb-glow: rgba(167,139,250,.34); --noise-opacity: .045;
+      --success: #a9e3cc; --code-bg: #241d3b; --code-text: #e9e2fc;
       --ai-muted: #c5badd; --ai-line: rgba(255,255,255,.16);
+      --star-glow: rgba(180,154,245,.5); --sheen: rgba(255,255,255,.14);
+      --logo-ring: #a88cf2; --logo-moon: #f0a6d6; --planet-light: #f4eeff; --planet-base: #b49af5; --planet-shade: #6a45c4;
     }
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; scroll-padding-top: 110px; }
@@ -105,6 +111,13 @@
     .hero-note { font-size: 11px; margin-top: 16px; color: var(--ink-soft); }
     .orb { position: absolute; width: 165px; height: 165px; top: 80px; right: -7px; z-index: -1; border-radius: 50%; background: radial-gradient(ellipse at 30% 25%,var(--white) 0%,var(--orb-light) 8%,var(--orb-base) 39%,var(--orb-shade) 80%); box-shadow: inset -15px -20px 24px var(--orb-shade),inset 5px 8px 16px var(--orb-light),0 25px 70px var(--orb-glow); animation: float 8s ease-in-out infinite; }
     .orb::after { content: ''; position: absolute; inset: 12px 20px 65%; border-radius: 50%; background: var(--white); filter: blur(13px); opacity: .65; transform: rotate(-25deg); }
+    .hero-mark { position: relative; display: block; width: 112px; height: 112px; margin: 0 auto 22px; }
+    .hero-mark::before { content: ''; position: absolute; inset: -60%; border-radius: 50%; background: radial-gradient(circle, var(--star-glow) 0%, var(--clear) 62%); }
+    .hero-mark svg { position: relative; width: 100%; height: 100%; overflow: visible; }
+    .logo-ring { fill: none; stroke: var(--logo-ring); stroke-width: 1.9; stroke-linecap: round; }
+    .preview-stage .mockup { position: relative; }
+    .preview-stage .mockup::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity 400ms; background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 30%), var(--sheen), var(--clear) 60%); }
+    .preview-stage:hover .mockup::after { opacity: 1; }
     .preview-stage { margin: 52px auto 0; max-width: 940px; position: relative; perspective: 1600px; padding: 18px 28px 45px; }
     .mockup { display: grid; grid-template-columns: 185px minmax(0,1fr); overflow: hidden; text-align: left; border-radius: 26px; transform: rotateX(7deg) rotateY(-7deg) rotateZ(1deg); animation: mock-float 10s ease-in-out infinite; }
     .mock-sidebar { padding: 25px 20px; background: var(--soft-panel); border-right: 1px solid var(--glass-border); display: flex; flex-direction: column; font-size: 11px; color: var(--ink-soft); }
@@ -178,6 +191,14 @@
     .motion-ready .reveal { opacity: 0; transform: translateY(18px); transition: opacity 650ms,transform 650ms; }
     .motion-ready .reveal.visible { opacity: 1; transform: none; }
     @keyframes drift { to { transform: translate(80px,-50px) scale(1.12); } }
+    .motion-ready .hero-mark .logo-ring { stroke-dasharray: 34; stroke-dashoffset: 34; animation: ring-draw 1000ms 250ms cubic-bezier(.2,.7,.2,1) forwards; }
+    .motion-ready .hero-mark .logo-planet { transform-box: fill-box; transform-origin: center; transform: scale(0); animation: planet-pop 650ms cubic-bezier(.3,1.5,.5,1) forwards; }
+    .motion-ready .hero-mark .logo-moon { opacity: 0; animation: moon-in 400ms 1150ms forwards; }
+    .motion-ready .hero-mark::before { opacity: 0; transform: scale(.4); animation: star-bloom 1400ms 500ms ease-out forwards; }
+    @keyframes ring-draw { to { stroke-dashoffset: 0; } }
+    @keyframes planet-pop { to { transform: scale(1); } }
+    @keyframes moon-in { to { opacity: 1; } }
+    @keyframes star-bloom { 60% { opacity: 1; transform: scale(1.15); } to { opacity: .85; transform: scale(1); } }
     @keyframes float { 50% { transform: translateY(-15px) rotate(4deg); } }
     @keyframes mock-float { 50% { transform: rotateX(5deg) rotateY(-5deg) rotateZ(.5deg) translateY(-9px); } }
     @media (min-width: 1440px) { .orb { right: 10px; } }
@@ -198,8 +219,10 @@
       .hero { padding-top: 65px; } h1 { margin-block: 22px; max-width: 620px; }
       .hero-copy { font-size: 14px; max-width: 390px; }
       .orb { width: 90px; height: 90px; right: -5px; top: 45px; opacity: .4; }
+      .hero-mark { width: 84px; height: 84px; margin-bottom: 18px; }
       .preview-stage { padding: 10px 0 40px; margin-top: 35px; }
       .mockup { grid-template-columns: 135px minmax(0,1fr); transform: rotateX(4deg) rotateY(-3deg); animation: none; }
+      .preview-stage .mockup::after { display: none; }
       .mock-sidebar { padding: 22px 12px; } .mock-main { padding: 17px 18px; }
       .floating-note { padding: 12px 15px; right: 8px; }
       .section { margin-top: 75px; }
@@ -236,7 +259,8 @@
   <a class="skip-link" href="#main">Skip to content</a>
   <div class="ambient" aria-hidden="true"><div class="blob blob-one"></div><div class="blob blob-two"></div><div class="blob blob-three"></div></div>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
-    <symbol id="aster" viewBox="0 0 32 32"><path d="M16 3v26M3 16h26M6.8 6.8l18.4 18.4M6.8 25.2L25.2 6.8" fill="none" stroke="currentColor" stroke-width="4.2" stroke-linecap="round"/></symbol>
+    <radialGradient id="aster-planet" cx="35%" cy="30%" r="75%"><stop offset="0" style="stop-color: var(--planet-light)"/><stop offset=".38" style="stop-color: var(--planet-base)"/><stop offset="1" style="stop-color: var(--planet-shade)"/></radialGradient>
+    <symbol id="aster" viewBox="0 0 32 32"><g transform="rotate(-22 16 16)"><path d="M2.5 16A13.5 5 0 0 1 29.5 16" style="fill: none; stroke: var(--logo-ring); stroke-width: 2.1; stroke-linecap: round"/><circle cx="16" cy="16" r="7.4" fill="url(#aster-planet)"/><path d="M29.5 16A13.5 5 0 0 1 2.5 16" style="fill: none; stroke: var(--logo-ring); stroke-width: 2.1; stroke-linecap: round"/><circle cx="27.4" cy="18.6" r="2" style="fill: var(--logo-moon)"/></g></symbol>
     <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
     <symbol id="check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
     <symbol id="file" viewBox="0 0 24 24"><path d="M14 3H5v18h14V8l-5-5ZM14 3v6h5M8 13h8M8 17h5"/></symbol>
@@ -263,6 +287,7 @@
   <main class="shell" id="main" tabindex="-1">
     <section class="hero" aria-labelledby="hero-title">
       <div class="orb" aria-hidden="true"></div>
+      <span class="hero-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><g transform="rotate(-22 16 16)"><path class="logo-ring" d="M2.5 16A13.5 5 0 0 1 29.5 16"/><circle class="logo-planet" cx="16" cy="16" r="7.2" fill="url(#aster-planet)"/><path class="logo-ring" d="M29.5 16A13.5 5 0 0 1 2.5 16"/><circle class="logo-moon" cx="27.4" cy="18.6" r="1.9" style="fill: var(--logo-moon)"/></g></svg></span>
       <p class="hero-kicker"><span class="dot" aria-hidden="true"></span>Your AI thinking partner</p>
       <h1 id="hero-title">A little clarity.<br><span class="gradient-text">A lot of possibility.</span></h1>
       <p class="hero-copy">Ask a question. Shape an idea. Make something useful.</p>
@@ -297,7 +322,7 @@ ideas = {}
     <section class="section" id="features" aria-labelledby="features-title">
       <div class="section-intro reveal"><h2 id="features-title">Think. Write. Make progress.</h2><p>Start with what’s on your mind.</p></div>
       <div class="feature-grid">
-        <article class="feature glass reveal"><div class="feature-icon"><svg class="icon" aria-hidden="true"><use href="#file"/></svg></div><h3>Bring the context with you.</h3><p>Add a document, text file, or image. Ask Aster to help you understand it.</p><div class="file-stack" aria-label="Example supported files"><div class="file-tile"><svg class="icon" aria-hidden="true"><use href="#file"/></svg><div><strong>Project brief.docx</strong><span>Word document</span></div></div><div class="file-tile"><svg class="icon" aria-hidden="true"><use href="#file"/></svg><div><strong>My ideas.md</strong><span>Markdown notes</span></div></div></div><div class="file-footer"><svg class="icon" aria-hidden="true"><use href="#lock"/></svg>Uploads stay in temporary session storage.</div></article>
+        <article class="feature glass reveal"><div class="feature-icon"><svg class="icon" aria-hidden="true"><use href="#file"/></svg></div><h3>Bring the context with you.</h3><p>Add a document, spreadsheet, slides, text file, or image. Ask Aster to help you understand it, even when it runs to hundreds of pages.</p><div class="file-stack" aria-label="Example supported files"><div class="file-tile"><svg class="icon" aria-hidden="true"><use href="#file"/></svg><div><strong>Project brief.docx</strong><span>Word document</span></div></div><div class="file-tile"><svg class="icon" aria-hidden="true"><use href="#file"/></svg><div><strong>My ideas.md</strong><span>Markdown notes</span></div></div></div><div class="file-footer"><svg class="icon" aria-hidden="true"><use href="#lock"/></svg>Account files stay with the conversation.</div></article>
         <article class="feature glass reveal"><div class="feature-icon"><svg class="icon" aria-hidden="true"><use href="#edit"/></svg></div><h3>Get past the first draft.</h3><p>Write, plan, or work through code. Refine it together.</p><div class="draft-preview"><div class="draft-prompt">“Make this a little more human.”</div><p>Hi Maya, I’ve been thinking about your idea. Could we find half an hour this week to explore it together?</p><div class="pill-row" aria-hidden="true"><span class="mini-pill">A clearer opening</span><span class="mini-pill">Your voice, kept</span></div></div></article>
         <article class="feature wide-feature glass reveal"><div class="feature-icon"><svg class="icon" aria-hidden="true"><use href="#chat"/></svg></div><div class="copy"><h3>A conversation worth coming back to.</h3><p>Keep your chats in one place. Return when you’re ready.</p></div><a class="button button-secondary button-small" href="/chat">Open your workspace</a></article>
       </div>
@@ -306,8 +331,8 @@ ideas = {}
       <div class="section-intro reveal"><h2 id="faq-title">Good to know.</h2><p>Before you start.</p></div>
       <div class="faq-list glass reveal">
         <details><summary>How do I get started?<svg class="icon" aria-hidden="true"><use href="#plus"/></svg></summary><p>Choose Continue as guest to try a temporary chat, with no account needed. Create an account or log in if you want to keep your chat history.</p></details>
-        <details><summary>Which files can I use?<svg class="icon" aria-hidden="true"><use href="#plus"/></svg></summary><p>Add Word documents, text files, or images. Images need a vision-capable model. PDF, Excel, and PowerPoint content is not currently read.</p></details>
-        <details><summary>What gets saved?<svg class="icon" aria-hidden="true"><use href="#plus"/></svg></summary><p>Account chats are saved. Guest chats stay in this tab, with no idle timeout. Closing the tab, ending the session, or a server restart ends the chat. Files are temporary in both modes. Relevant content goes to the configured AI provider. Review important answers and keep this local app off the public internet.</p></details>
+        <details><summary>Which files can I use?<svg class="icon" aria-hidden="true"><use href="#plus"/></svg></summary><p>Word documents, text files, and images work out of the box; images need a vision-capable model. PDFs, spreadsheets, slides, and scans are read when file parsing is set up. Large files are read page by page, and Aster tells you which pages it used.</p></details>
+        <details><summary>What gets saved?<svg class="icon" aria-hidden="true"><use href="#plus"/></svg></summary><p>Account chats and their files are saved until you delete them. Guest chats and files stay in this tab, with no idle timeout; closing the tab, ending the session, or a server restart ends them. Relevant content goes to the configured AI provider. Review important answers and keep this local app off the public internet.</p></details>
       </div>
     </section>
     <section class="section final-cta glass reveal" aria-labelledby="cta-title"><h2 id="cta-title">Start somewhere.<br>See where it takes you.</h2><p>You don’t have to have it all figured out.<br>Bring one question. We’ll start there.</p><a class="button button-primary" href="/chat">Let’s talk<svg class="icon" aria-hidden="true"><use href="#chat"/></svg></a></section>
@@ -356,6 +381,12 @@ ideas = {}
       };
       window.addEventListener('hashchange', openHash);
       openHash();
+      const stage = document.querySelector('.preview-stage');
+      stage.addEventListener('pointermove', event => {
+        const box = stage.querySelector('.mockup').getBoundingClientRect();
+        stage.style.setProperty('--mx', `${event.clientX - box.left}px`);
+        stage.style.setProperty('--my', `${event.clientY - box.top}px`);
+      });
       if ('IntersectionObserver' in window && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
         const observer = new IntersectionObserver(entries => {
           entries.forEach(entry => {

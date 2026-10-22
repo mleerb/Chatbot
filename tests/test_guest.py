@@ -18,11 +18,15 @@ class GuestTests(unittest.TestCase):
         self.addCleanup(self.client.close)
         self.addCleanup(sessions.clear)
         self.database = mock_database(self)
+        self.title = patch('app.services.title.generate', return_value='')
+        self.title.start()
+        self.addCleanup(self.title.stop)
         self.client.post('/api/auth/logout')
         self.no_database = ExitStack()
         for name in ('users', 'get_user', 'messages', 'conversations', 'create_user', 'create_conversation',
                      'get_conversation', 'update_conversation', 'delete_conversation', 'save_turn',
-                     'create_account', 'account_by_email'):
+                     'create_account', 'account_by_email', 'save_file', 'update_file_text', 'conversation_files',
+                     'delete_files', 'attached_file_ids'):
             self.no_database.enter_context(patch(f'app.db.repository.{name}', side_effect=AssertionError('Guest database access')))
         self.addCleanup(self.no_database.close)
 
@@ -87,22 +91,49 @@ class GuestTests(unittest.TestCase):
         self.assertEqual(self.client.post('/api/users/1/select').status_code, 401)
         self.assertEqual(self.client.post('/api/conversations/1/select').status_code, 404)
 
-    def test_new_chat_and_delete_clear_guest_messages_and_files(self):
+    def test_new_chat_keeps_previous_guest_chats_and_files(self):
         self.start_guest()
         self.client.post('/api/document', files={'file': ('note.txt', b'private')})
-        self.send()
-        old = self.client.get('/api/state').json()['conversation_id']
+        self.send('First question')
+        first = self.client.get('/api/state').json()['conversation_id']
         response = self.client.post('/api/conversations')
         self.assertEqual(response.status_code, 201)
-        current = response.json()['id']
-        self.assertNotEqual(old, current)
+        second = response.json()['id']
+        self.assertNotEqual(first, second)
+        self.assertEqual(response.json()['title'], 'Temporary chat 2')
         state = self.client.get('/api/state').json()
         self.assertEqual(state['messages'], [])
         self.assertEqual(state['uploads'], [])
-        self.assertEqual(self.client.patch(f'/api/conversations/{current}', json={'title': 'Temporary'}).status_code, 200)
-        self.assertEqual(self.client.patch(f'/api/conversations/{current}', json={'pinned': True}).status_code, 403)
-        self.assertEqual(self.client.delete(f'/api/conversations/{current}').status_code, 200)
-        self.assertEqual(self.client.get('/api/state').json()['conversations'], [])
+        self.assertEqual([chat['id'] for chat in state['conversations']], [second, first])
+        self.send('Second question')
+        self.assertEqual(self.client.post(f'/api/conversations/{first}/select').status_code, 200)
+        state = self.client.get('/api/state').json()
+        self.assertEqual(state['conversation_id'], first)
+        self.assertEqual(state['messages'][0]['content'], 'First question')
+        self.assertEqual([item['filename'] for item in state['uploads']], ['note.txt'])
+        self.assertEqual(self.client.get('/api/document/download').content, b'private')
+        self.client.post(f'/api/conversations/{second}/select')
+        state = self.client.get('/api/state').json()
+        self.assertEqual(state['messages'][0]['content'], 'Second question')
+        self.assertEqual(state['uploads'], [])
+
+    def test_guest_chat_rename_pin_and_delete(self):
+        self.start_guest()
+        self.send('First question')
+        first = self.client.get('/api/state').json()['conversation_id']
+        second = self.client.post('/api/conversations').json()['id']
+        self.assertEqual(self.client.patch(f'/api/conversations/{second}', json={'title': 'Renamed'}).json()['title'], 'Renamed')
+        self.assertEqual(self.client.patch(f'/api/conversations/{second}', json={'pinned': True}).status_code, 403)
+        self.assertEqual(self.client.delete(f'/api/conversations/{second}').status_code, 200)
+        state = self.client.get('/api/state').json()
+        self.assertEqual(state['conversation_id'], first)
+        self.assertEqual(state['messages'][0]['content'], 'First question')
+        self.assertEqual(self.client.post(f'/api/conversations/{second}/select').status_code, 404)
+        self.assertEqual(self.client.delete(f'/api/conversations/{first}').status_code, 200)
+        state = self.client.get('/api/state').json()
+        self.assertEqual(state['conversations'], [])
+        self.assertIsNone(state['conversation_id'])
+        self.assertEqual(state['messages'], [])
 
     def test_no_idle_expiry_and_logout_revokes_guest_history(self):
         self.start_guest()
@@ -113,7 +144,7 @@ class GuestTests(unittest.TestCase):
         self.assertEqual(len(self.client.get('/api/state').json()['messages']), 2)
         previous = sessions[token]
         self.client.post('/api/auth/logout')
-        self.assertEqual(previous.guest_messages, [])
+        self.assertEqual(previous.guest_chats, {})
         self.assertFalse(previous.guest)
         self.assertNotIn(token, sessions)
 
@@ -126,7 +157,7 @@ class GuestTests(unittest.TestCase):
         response = self.client.post('/api/auth/login', json={'email': 'tester@example.com', 'password': 'test-password-123'})
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.json()['guest'])
-        self.assertEqual(previous.guest_messages, [])
+        self.assertEqual(previous.guest_chats, {})
         self.assertNotIn(token, sessions)
         del self.client.headers['x-guest-session']
         self.assertEqual(self.client.get('/api/state').json()['messages'], [])

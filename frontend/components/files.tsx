@@ -1,60 +1,61 @@
-import type { Files, Upload } from '../lib/api';
+import type { DownloadInfo, Files, Upload } from '../lib/api';
 import Icon from './icon';
 import { guestDownload } from '../lib/guest';
 
-export function AttachedFiles({ uploads, disabled, onRemove }: {
+export function AttachedFiles({ uploads, pending, disabled, onRemove }: {
   uploads: Upload[];
+  pending: string[];
   disabled: boolean;
-  onRemove: (id: string) => Promise<void>;
+  onRemove: (id?: string) => Promise<void>;
 }) {
-  if (!uploads.length) return null;
+  if (!uploads.length && !pending.length) return null;
   return <div className="attached-files" aria-label="Active attachments">
-    {uploads.map(file => <div className="attachment" key={file.id}>
-      <Icon name="file" /><span title={file.filename}>{file.filename}</span>
-      <button type="button" className="icon-button" aria-label={`Remove ${file.filename}`} disabled={disabled}
-        onClick={() => void onRemove(file.id)}><Icon name="close" /></button>
+    {uploads.map(file => {
+      const query = `file_id=${encodeURIComponent(file.id)}`;
+      return <div className="attachment" key={file.id} title={`${file.filename} · ${file.status}`}>
+        <Icon name="file" /><span className="attachment-name">{file.filename}</span>
+        {file.edits.map((edit, index) => <a key={edit.id} className="attachment-revision" download={edit.filename} onClick={guestDownload}
+          aria-label={`Edited v${index + 1}`} href={`/api/document/edited?${query}&revision_id=${encodeURIComponent(edit.id)}`}>v{index + 1}</a>)}
+        <a className="icon-button" href={`/api/document/download?${query}`} download={file.filename} onClick={guestDownload}
+          aria-label={`Download ${file.filename}`}><Icon name="download" /></a>
+        <button type="button" className="icon-button" aria-label={`Remove ${file.filename}`} disabled={disabled}
+          onClick={() => void onRemove(file.id)}><Icon name="close" /></button>
+      </div>;
+    })}
+    {pending.map((name, index) => <div className="attachment pending" key={`pending-${index}`} role="status">
+      <span className="attachment-spinner" aria-hidden="true" /><span className="attachment-name">{name}</span><span className="sr-only">Uploading</span>
     </div>)}
+    {uploads.length > 1 && <button type="button" className="text-button attachment-clear" disabled={disabled}
+      onClick={async () => { for (const file of uploads) await onRemove(file.id); }}>Remove all</button>}
   </div>;
 }
 
-export function FileShelf({ files, busy, onRemove }: {
-  files: Files;
-  busy: boolean;
-  onRemove: (id?: string) => Promise<void>;
-}) {
-  if (!files.uploads.length && !files.generated_files.length) return null;
-  return <section className="conversation-files" aria-label="Conversation files">
-    {!!files.uploads.length && <>
-      <div className="file-heading"><h2>Attached files</h2>
-        <button type="button" className="text-button" disabled={busy} onClick={() => void onRemove()}>Remove all</button>
-      </div>
-      <div className="uploads" aria-label="Uploaded files">
-        {files.uploads.map(file => {
-          const query = `file_id=${encodeURIComponent(file.id)}`;
-          return <article className="file-item" key={file.id}>
-            <div className="file-identity"><span className="file-symbol"><Icon name="file" /></span>
-              <div><h3>{file.filename}</h3><p>{file.status}</p></div>
-            </div>
-            <div className="file-actions">
-              <a href={`/api/document/download?${query}`} download={file.filename} onClick={guestDownload}>Download original</a>
-              <button type="button" className="text-button" disabled={busy} onClick={() => void onRemove(file.id)}>Remove file</button>
-            </div>
-            {!!file.edits.length && <div className="revisions" aria-label={`Edited versions of ${file.filename}`}>
-              {file.edits.map((edit, index) => <a key={edit.id} className="revision" download={edit.filename} onClick={guestDownload}
-                href={`/api/document/edited?${query}&revision_id=${encodeURIComponent(edit.id)}`}>
-                <Icon name="download" /> Edited v{index + 1}
-              </a>)}
-            </div>}
-          </article>;
-        })}
-      </div>
-    </>}
-    {!!files.generated_files.length && <section className="generated" aria-label="Generated files">
-      <h2>Created files</h2>
-      {files.generated_files.map(file => <a key={file.id} className="generated-file" download={file.filename} onClick={guestDownload}
-        href={`/api/files/download?file_id=${encodeURIComponent(file.id)}`}>
-        <Icon name="file" /><span>{file.filename}</span><Icon name="download" /><span className="sr-only">Download</span>
-      </a>)}
-    </section>}
+export function MessageFiles({ attachments, uploads }: { attachments: DownloadInfo[]; uploads: Upload[] }) {
+  return <div className="message-files" aria-label="Files sent with this message">
+    {attachments.map(attachment => {
+      const file = uploads.find(upload => upload.id === attachment.id);
+      const query = `file_id=${encodeURIComponent(attachment.id)}`;
+      if (!file) return <div className="attachment removed" key={attachment.id} title={`${attachment.filename} (removed)`}>
+        <Icon name="file" /><span className="attachment-name">{attachment.filename}</span>
+      </div>;
+      return <div className="attachment" key={attachment.id} title={`${file.filename} · ${file.status}`}>
+        <Icon name="file" /><span className="attachment-name">{file.filename}</span>
+        {file.edits.map((edit, index) => <a key={edit.id} className="attachment-revision" download={edit.filename} onClick={guestDownload}
+          aria-label={`Edited v${index + 1}`} href={`/api/document/edited?${query}&revision_id=${encodeURIComponent(edit.id)}`}>v{index + 1}</a>)}
+        <a className="icon-button" href={`/api/document/download?${query}`} download={file.filename} onClick={guestDownload}
+          aria-label={`Download ${file.filename}`}><Icon name="download" /></a>
+      </div>;
+    })}
+  </div>;
+}
+
+export function GeneratedFiles({ files }: { files: Files }) {
+  if (!files.generated_files.length) return null;
+  return <section className="conversation-files generated" aria-label="Generated files">
+    <h2>Created files</h2>
+    {files.generated_files.map(file => <a key={file.id} className="generated-file" download={file.filename} onClick={guestDownload}
+      href={`/api/files/download?file_id=${encodeURIComponent(file.id)}`}>
+      <Icon name="file" /><span>{file.filename}</span><Icon name="download" /><span className="sr-only">Download</span>
+    </a>)}
   </section>;
 }

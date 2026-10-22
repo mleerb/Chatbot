@@ -8,6 +8,7 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Aster',
   description: 'A local AI agent chatbot for questions, ideas, writing, planning, and working with files.',
+  icons: { icon: '/logo.svg' },
 };
 
 export default function Layout({ children }: { children: ReactNode }) {

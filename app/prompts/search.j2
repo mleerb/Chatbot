@@ -1,0 +1,9 @@
+Keyword search for {{ query | tojson }} in {{ upload_name }} (file_id={{ file_id }}): matches on {{ match_count }} of {{ page_count }} pages{% if results | length < match_count %}, showing the best {{ results | length }}{% endif %}.
+{% if results %}
+These are snippets only; the pages have not been read. Use read_page before relying on a page.
+{% for result in results %}
+- Page {{ result.number }}{% if result.label %} (source page {{ result.label }}){% endif %}: {{ result.snippet }}
+{%- endfor %}
+{% else %}
+No page contains these words. That does not prove the file lacks the information; try other words or read pages from the outline.
+{% endif %}

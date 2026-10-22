@@ -7,13 +7,14 @@ type Props = {
   conversations: Conversation[];
   selected: number | null;
   busy: boolean;
+  canPin: boolean;
   onCreate: () => Promise<void>;
   onSelect: (id: number) => Promise<void>;
   onUpdate: (id: number, changes: { title?: string; pinned?: boolean }) => Promise<boolean>;
   onDelete: (id: number) => Promise<boolean>;
 };
 
-export default function Conversations({ conversations, selected, busy, onCreate, onSelect, onUpdate, onDelete }: Props) {
+export default function Conversations({ conversations, selected, busy, canPin, onCreate, onSelect, onUpdate, onDelete }: Props) {
   const [editing, setEditing] = useState<{ id: number; title: string } | null>(null);
   const [deleting, setDeleting] = useState<number | null>(null);
 
@@ -35,7 +36,7 @@ export default function Conversations({ conversations, selected, busy, onCreate,
           {chat.pinned && <span className="sr-only"> (Pinned)</span>}
         </button>
         <Actions conversation={chat} busy={busy}
-          onPin={() => void onUpdate(chat.id, { pinned: !chat.pinned })}
+          onPin={canPin ? () => void onUpdate(chat.id, { pinned: !chat.pinned }) : undefined}
           onRename={() => { setEditing({ id: chat.id, title: chat.title }); setDeleting(null); }}
           onDelete={() => { setDeleting(chat.id); setEditing(null); }} />
         </div>

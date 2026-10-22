@@ -18,6 +18,9 @@ class SearchTests(unittest.TestCase):
         sessions.clear()
         self.client = TestClient(app)
         mock_database(self)
+        self.title = patch('app.services.title.generate', return_value='')
+        self.title.start()
+        self.addCleanup(self.title.stop)
 
     def tearDown(self):
         self.client.close()
@@ -47,10 +50,10 @@ class SearchTests(unittest.TestCase):
         with patch('app.services.agent.chat_model', return_value='openai:test'), patch('app.services.agent.create_deep_agent', return_value=object()) as factory:
             with patch.dict(os.environ, {"TAVILY_API_KEY": ""}):
                 make_agent('token', 'question', [])
-                self.assertEqual(len(factory.call_args.kwargs['tools']), 2)
+                self.assertEqual(len(factory.call_args.kwargs['tools']), 5)
             with patch.dict(os.environ, {"TAVILY_API_KEY": "test-key"}):
                 make_agent('token', 'question', [])
-                self.assertEqual(len(factory.call_args.kwargs['tools']), 3)
+                self.assertEqual(len(factory.call_args.kwargs['tools']), 6)
 
     def test_evidence_in_response_and_state_but_not_model_history(self):
         self.client.post('/api/document', files={'file': ('private.md', b'private file contents')})

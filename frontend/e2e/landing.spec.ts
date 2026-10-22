@@ -100,6 +100,9 @@ test('reduced motion, skip navigation and standalone file', async ({ page }) => 
   await expect(page).toHaveURL(/#main$/);
   expect(await page.locator('.button-primary').first().evaluate(element => getComputedStyle(element).transitionDuration)).toBe('0s');
   expect(await page.locator('.orb').evaluate(element => getComputedStyle(element).animationName)).toBe('none');
+  const ray = page.locator('.hero-mark .logo-ring').first();
+  expect(await ray.evaluate(element => getComputedStyle(element).animationName)).toBe('none');
+  expect(await ray.evaluate(element => getComputedStyle(element).strokeDashoffset)).toBe('0px');
   await page.goto('/landing.html');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 });

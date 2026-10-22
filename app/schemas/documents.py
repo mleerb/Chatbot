@@ -8,6 +8,7 @@ class DownloadInfo(BaseModel):
 
 class UploadResponse(DownloadInfo):
     status: str
+    sent: bool = False
     edits: list[DownloadInfo] = Field(default_factory=list)
 
 

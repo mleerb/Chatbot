@@ -7,6 +7,8 @@ from pydantic import BaseModel, Field
 
 from app.services.sessions import Download, sessions, sessions_lock
 from app.services.extract import file_context
+from app.services import storage
+from app.services.pages import text_pages
 from app.core.file_types import TEXT_EXTENSIONS
 
 
@@ -89,8 +91,15 @@ def create_edit_tool(token: str):
         except ValueError as exc:
             return str(exc)
         revision = Download(item.filename, edited)
-        item.edits.append(revision)
+        previous = item.document, item.image_url, item.status, item.pages
         item.document, item.image_url, item.status = file_context(item.filename, edited)
+        item.pages = text_pages(item.document)
+        try:
+            storage.save_revision(session, item, revision)
+        except Exception:
+            item.document, item.image_url, item.status, item.pages = previous
+            return "Could not save the edited copy; no edit saved."
+        item.edits.append(revision)
         return f"Edited copy ready for download: {item.filename} (file_id={item.id}, revision_id={revision.id}). The original is unchanged."
 
     return edit_uploaded_file

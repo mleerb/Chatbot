@@ -19,6 +19,7 @@ class Message(BaseModel):
     role: Literal["user", "assistant"]
     content: str
     sources: list[Source] = Field(default_factory=list)
+    attachments: list[DownloadInfo] = Field(default_factory=list)
 
 
 class ChatResponse(BaseModel):

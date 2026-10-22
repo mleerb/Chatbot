@@ -1,0 +1,7 @@
+Outline of {{ upload_name }} (file_id={{ file_id }}): {{ page_count }} pages, about {{ tokens }} tokens. These are short previews only; no page has been read.
+{% for entry in entries %}
+- Page {{ entry.number }}{% if entry.label %} (source page {{ entry.label }}){% endif %}: {{ entry.preview }}
+{%- endfor %}
+{% if hidden %}
+{{ hidden }} more pages are not listed. Use search_in_file or read_page to reach them.
+{% endif %}

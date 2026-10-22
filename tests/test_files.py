@@ -17,6 +17,9 @@ class GeneratedFileTests(unittest.TestCase):
         sessions.clear()
         self.client = TestClient(app)
         mock_database(self)
+        self.title = patch('app.services.title.generate', return_value='')
+        self.title.start()
+        self.addCleanup(self.title.stop)
 
     def tearDown(self):
         self.client.close()
@@ -47,7 +50,7 @@ class GeneratedFileTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/state').json()['generated_files'][0]['filename'], 'notes.md')
         with TestClient(app) as other:
             other.post('/api/auth/login', json={'email': 'tester@example.com', 'password': 'test-password-123'})
-            self.assertEqual(other.get('/api/files/download').status_code, 404)
+            self.assertEqual(other.get('/api/files/download').content, b'# Hello\n')
 
     def test_invalid_extensions_paths_and_large_outputs(self):
         for filename in ('../bad.md', 'dir/file.txt', r'dir\\file.txt', 'program.exe', 'image.png', ''):

@@ -5,10 +5,11 @@ import { errorMessage, request, type Files, type Message, type Reply, type State
 import Composer from './composer';
 import Brand from './brand';
 import Conversations from './conversations';
-import { FileShelf } from './files';
+import { GeneratedFiles } from './files';
 import Icon from './icon';
 import Messages from './messages';
 import Auth from './auth';
+import Logo from './logo';
 import { guestToken, setGuestToken } from '../lib/guest';
 
 const emptyFiles: Files = { uploads: [], generated_files: [] };
@@ -24,14 +25,21 @@ export default function Chat() {
   const [files, setFiles] = useState<Files>(emptyFiles);
   const [busy, setBusy] = useState(true);
   const [pending, setPending] = useState(false);
+  const [uploading, setUploading] = useState<string[]>([]);
+  const [collapsed, setCollapsed] = useState(false);
   const [error, setError] = useState('');
   const [warning, setWarning] = useState('');
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const working = useRef(true);
+  const uploadingNow = useRef(false);
   const initialized = useRef(false);
   const sidebar = useRef<HTMLDialogElement>(null);
   const conversation = useRef<HTMLDivElement>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    try { setCollapsed(localStorage.getItem('aster-sidebar') === 'collapsed'); } catch {}
+  }, []);
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 760px)');
@@ -39,13 +47,13 @@ export default function Chat() {
       const panel = sidebar.current;
       if (!panel) return;
       panel.close();
-      if (!media.matches) panel.show();
+      if (!media.matches && !collapsed) panel.show();
       setSidebarOpen(false);
     }
     update();
     media.addEventListener('change', update);
     return () => media.removeEventListener('change', update);
-  }, [account, guest]);
+  }, [account, guest, collapsed]);
 
   useEffect(() => {
     const area = conversation.current;
@@ -55,6 +63,19 @@ export default function Chat() {
   function closeSidebar() {
     if (window.matchMedia('(max-width: 760px)').matches) sidebar.current?.close();
     setSidebarOpen(false);
+  }
+  function rememberSidebar(open: boolean) {
+    setCollapsed(!open);
+    try { localStorage.setItem('aster-sidebar', open ? 'open' : 'collapsed'); } catch {}
+  }
+  function openSidebar() {
+    if (!window.matchMedia('(max-width: 760px)').matches) return rememberSidebar(true);
+    sidebar.current?.showModal();
+    setSidebarOpen(true);
+  }
+  function hideSidebar() {
+    if (window.matchMedia('(max-width: 760px)').matches) closeSidebar();
+    else rememberSidebar(false);
   }
 
   useEffect(() => {
@@ -98,7 +119,7 @@ export default function Chat() {
   }, []);
 
   function start(): boolean {
-    if (working.current) return false;
+    if (working.current || uploadingNow.current) return false;
     working.current = true;
     setBusy(true);
     setError('');
@@ -162,7 +183,9 @@ export default function Chat() {
   }
   async function send(message: string) {
     if (!ready || !start()) return;
-    setMessages(items => [...items, { role: 'user', content: message }]);
+    const attachments = files.uploads.filter(file => !file.sent).map(({ id, filename }) => ({ id, filename }));
+    setMessages(items => [...items, { role: 'user', content: message, attachments }]);
+    setFiles(current => ({ ...current, uploads: current.uploads.map(file => ({ ...file, sent: true })) }));
     setPending(true);
     try {
       const result = await request<Reply>('/api/chat', {
@@ -178,8 +201,11 @@ export default function Chat() {
     }
   }
   async function upload(items: File[]) {
-    if (!ready || !start()) return;
+    if (!ready || working.current || uploadingNow.current) return;
+    uploadingNow.current = true;
     setWarning('');
+    setError('');
+    setUploading(items.map(file => file.name));
     const failures: string[] = [];
     try {
       for (const file of items) {
@@ -187,11 +213,15 @@ export default function Chat() {
         body.append('file', file);
         try { await request('/api/document', { method: 'POST', body }); }
         catch (error) { failures.push(`${file.name}: ${errorMessage(error)}`); }
+        setUploading(names => names.slice(1));
+        try { await refreshFiles(); } catch {}
       }
-      await refreshFiles();
       setWarning(failures.join('\n'));
     } catch (error) { setWarning(errorMessage(error)); }
-    finally { finish(); }
+    finally {
+      uploadingNow.current = false;
+      setUploading([]);
+    }
   }
   async function remove(id?: string) {
     if (!start()) return;
@@ -217,14 +247,16 @@ export default function Chat() {
     {error && <p className="auth-error error" role="alert">{error}</p>}
   </main>;
 
-  return <main className="app" data-app data-theme={theme}>
+  const locked = busy || uploading.length > 0;
+
+  return <main className="app" data-app data-theme={theme} data-sidebar={collapsed ? 'collapsed' : 'open'}>
     <dialog ref={sidebar} id="sidebar" className="sidebar" aria-label="Workspace sidebar" onClose={() => setSidebarOpen(false)}>
-      <div className="sidebar-brand"><span className="brand-mark" aria-hidden="true">✳</span><Brand />
-        <button type="button" className="icon-button close-sidebar" aria-label="Close sidebar" onClick={closeSidebar}><Icon name="close" /></button>
+      <div className="sidebar-brand"><Logo className="brand-mark" /><Brand />
+        <button type="button" className="icon-button close-sidebar" aria-label="Close sidebar" title="Close sidebar" onClick={hideSidebar}><Icon name="sidebar" /></button>
       </div>
       <div className="account-info"><span className="account-avatar" aria-hidden="true">{account?.name.slice(0, 1) ?? 'G'}</span><div><strong>{account?.name ?? 'Guest'}</strong><span>{guest ? 'This session only' : account?.email}</span></div></div>
-      {guest && <div className="guest-notice"><strong>Temporary chat</strong><p>Nothing is saved to your account. Stays while this tab is open. Closing the tab or restarting the server ends it.</p><button type="button" className="primary-button" disabled={busy} onClick={() => { if (window.confirm('End this guest chat? Messages and files will be cleared.')) void conversationAction('/api/conversations', 'POST'); }}>New temporary chat</button></div>}
-      {selected && !guest && <Conversations key={selected} conversations={conversations} selected={active} busy={busy}
+      {guest && <div className="guest-notice"><strong>Temporary chats</strong><p>Nothing is saved to your account. Every chat stays while this tab is open. Closing the tab or restarting the server ends them.</p></div>}
+      {(selected || guest) && <Conversations key={selected ?? 'guest'} conversations={conversations} selected={active} busy={locked} canPin={!guest}
         onCreate={async () => { await conversationAction('/api/conversations', 'POST'); }}
         onSelect={async id => { await conversationAction(`/api/conversations/${id}/select`, 'POST'); }}
         onUpdate={(id, changes) => conversationAction(`/api/conversations/${id}`, 'PATCH', changes)}
@@ -234,21 +266,20 @@ export default function Chat() {
           aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}>
           <Icon name={theme === 'light' ? 'moon' : 'sun'} />{theme === 'light' ? 'Dark mode' : 'Light mode'}
         </button>
-        <button className="theme-toggle" type="button" disabled={busy} onClick={() => { if (!guest || window.confirm('End this guest session? Messages and files will be cleared before you log in.')) void logout(); }}>{guest ? 'End guest session / Log in' : 'Log out'}</button>
+        <button className="theme-toggle" type="button" disabled={locked} onClick={() => { if (!guest || window.confirm('End this guest session? Messages and files will be cleared before you log in.')) void logout(); }}>{guest ? 'End guest session / Log in' : 'Log out'}</button>
         <a className="workspace-home" href="/">Back to Aster</a>
-        <p>{guest ? 'Guest history is not saved.' : 'History is saved. Files are temporary.'}</p>
+        <p>{guest ? 'Guest chats and files last while this tab is open.' : 'Chats and files are saved to your account.'}</p>
       </div>
     </dialog>
     <section className="chat-panel" aria-label="Conversation">
       <header className="chat-header">
-        <button type="button" className="icon-button open-sidebar" aria-label="Open sidebar" aria-controls="sidebar" aria-expanded={sidebarOpen}
-          onClick={() => { sidebar.current?.showModal(); setSidebarOpen(true); }}><Icon name="menu" /></button>
+        <button type="button" className="icon-button open-sidebar" aria-label="Open sidebar" title="Open sidebar" aria-controls="sidebar" aria-expanded={sidebarOpen}
+          onClick={openSidebar}><Icon name="sidebar" /></button>
         <div><h2>{activeConversation?.title ?? (guest ? 'Temporary chat' : 'Conversation')}</h2><p>{guest ? 'Guest mode · session-only history' : 'A little clarity, one message at a time.'}</p></div>
-        {!!files.uploads.length && <span className="file-count"><Icon name="file" />{files.uploads.length} attached</span>}
       </header>
       <div ref={conversation} className="conversation-scroll">
-        <Messages messages={messages} pending={pending} selected={ready}>
-          <FileShelf files={files} busy={busy} onRemove={remove} />
+        <Messages messages={messages} uploads={files.uploads} pending={pending} selected={ready}>
+          <GeneratedFiles files={files} />
         </Messages>
       </div>
       <div className="feedback" aria-live="polite">
@@ -256,7 +287,8 @@ export default function Chat() {
         <p className="error" role="alert" hidden={!warning}>{warning}</p>
         <p className="operation-status" role="status" hidden={!busy || pending}>{initialized.current ? 'Updating workspace…' : 'Loading workspace…'}</p>
       </div>
-      <Composer disabled={busy || !ready} selected={ready} uploads={files.uploads} onSend={send} onUpload={upload} onRemove={remove} />
+      <Composer disabled={busy || !ready} selected={ready} guest={guest} uploads={files.uploads} pending={uploading}
+        onSend={send} onUpload={upload} onRemove={remove} />
     </section>
   </main>;
 }

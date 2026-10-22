@@ -1,11 +1,11 @@
 import { guestToken } from './guest';
 
 export type Source = { title: string; url: string };
-export type Message = { role: 'user' | 'assistant'; content: string; sources?: Source[] };
+export type DownloadInfo = { id: string; filename: string };
+export type Message = { role: 'user' | 'assistant'; content: string; sources?: Source[]; attachments?: DownloadInfo[] };
 export type User = { id: number; name: string; email?: string };
 export type Conversation = { id: number; user_id: number; title: string; pinned: boolean };
-export type DownloadInfo = { id: string; filename: string };
-export type Upload = DownloadInfo & { status: string; edits: DownloadInfo[] };
+export type Upload = DownloadInfo & { status: string; sent: boolean; edits: DownloadInfo[] };
 export type Files = { uploads: Upload[]; generated_files: DownloadInfo[] };
 export type State = Files & { user_id: number | null; conversation_id: number | null; conversations: Conversation[]; messages: Message[] };
 export type Reply = Files & { answer: string; display_answer: string; sources: Source[] };

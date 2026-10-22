@@ -16,6 +16,9 @@ class EditTests(unittest.TestCase):
         sessions.clear()
         self.client = TestClient(app)
         mock_database(self)
+        self.title = patch('app.services.title.generate', return_value='')
+        self.title.start()
+        self.addCleanup(self.title.stop)
 
     def tearDown(self):
         self.client.close()
@@ -40,7 +43,8 @@ class EditTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/state').json()['uploads'][0]['edits'][0]['filename'], 'note.md')
         with TestClient(app) as another:
             another.post('/api/auth/login', json={'email': 'tester@example.com', 'password': 'test-password-123'})
-            self.assertEqual(another.get('/api/document/edited').status_code, 404)
+            self.assertEqual(another.get('/api/document/edited').content, b'Hello new world\n')
+            self.assertEqual(another.get('/api/document/download').content, b'Hello old world\n')
         self.client.delete('/api/document')
         self.assertEqual(self.client.get('/api/document/edited').status_code, 404)
 

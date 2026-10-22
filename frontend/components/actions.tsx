@@ -6,7 +6,7 @@ type Props = {
   conversation: Conversation;
   busy: boolean;
   onRename: () => void;
-  onPin: () => void;
+  onPin?: () => void;
   onDelete: () => void;
 };
 
@@ -48,10 +48,10 @@ export default function Actions({ conversation, busy, onRename, onPin, onDelete 
       <button type="button" disabled={busy} aria-label={`Rename ${conversation.title}`} onClick={() => choose(onRename)}>
         <Icon name="edit" />Rename
       </button>
-      <button type="button" disabled={busy} aria-pressed={conversation.pinned}
+      {onPin && <button type="button" disabled={busy} aria-pressed={conversation.pinned}
         aria-label={`${conversation.pinned ? 'Unpin' : 'Pin'} ${conversation.title}`} onClick={() => choose(onPin)}>
         <Icon name="pin" />{conversation.pinned ? 'Unpin' : 'Pin'}
-      </button>
+      </button>}
       <button type="button" className="delete-action" disabled={busy} aria-label={`Delete ${conversation.title}`}
         onClick={() => choose(onDelete)}><Icon name="trash" />Delete</button>
     </div>}

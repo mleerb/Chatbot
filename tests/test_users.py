@@ -13,6 +13,9 @@ class UserTests(unittest.TestCase):
         sessions.clear()
         self.client = TestClient(app)
         self.database = mock_database(self)
+        self.title = patch('app.services.title.generate', return_value='')
+        self.title.start()
+        self.addCleanup(self.title.stop)
 
     def tearDown(self):
         self.client.close()
@@ -34,8 +37,9 @@ class UserTests(unittest.TestCase):
         self.assertEqual(self.client.post('/api/users/1/select').status_code, 403)
         self.assertEqual(self.client.get('/api/users/1/messages').status_code, 403)
         self.assertEqual(self.client.get('/api/state').json()['messages'], [])
-        self.client.post('/api/auth/login', json={'email': 'tester@example.com', 'password': 'test-password-123'})
         self.assertEqual(self.client.get('/api/state').json()['uploads'], [])
+        self.client.post('/api/auth/login', json={'email': 'tester@example.com', 'password': 'test-password-123'})
+        self.assertEqual([item['filename'] for item in self.client.get('/api/state').json()['uploads']], ['private.md'])
         self.assertEqual(self.client.get('/api/users/1/messages').json()[0]['content'], 'First question')
 
     def test_save_failure_does_not_report_success(self):

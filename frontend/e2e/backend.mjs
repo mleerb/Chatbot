@@ -5,18 +5,33 @@ const sessions = new Map();
 const users = [{ id: 1, name: 'Tester', email: 'tester@example.com' }, { id: 2, name: 'Other', email: 'other@example.com' }];
 const conversations = [];
 const histories = new Map();
+const chatFiles = new Map();
 let nextConversation = 1;
-function createConversation(userId) {
-  const chat = { id: nextConversation++, user_id: userId, title: 'New conversation', pinned: false };
+function owner(state) {
+  return state.guest ? state.owner : state.user_id;
+}
+function createConversation(userId, title = 'New conversation') {
+  const chat = { id: nextConversation++, user_id: userId, title, pinned: false };
   conversations.push(chat);
   histories.set(chat.id, []);
   return chat;
 }
+function newConversation(state) {
+  if (!state.guest) return createConversation(state.user_id);
+  const number = list(owner(state)).length + 1;
+  return createConversation(owner(state), number === 1 ? 'Temporary chat' : `Temporary chat ${number}`);
+}
 function list(userId) {
   return conversations.filter(chat => chat.user_id === userId).sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.id - a.id);
 }
+function keepFiles(state) {
+  if (state.conversation_id) chatFiles.set(state.conversation_id, { uploads: state.uploads, generated_files: state.generated_files });
+}
 function activate(state, chat) {
-  if (state.conversation_id !== chat.id) Object.assign(state, { uploads: [], generated_files: [] });
+  if (state.conversation_id !== chat.id) {
+    if (state.conversation_id) keepFiles(state);
+    Object.assign(state, chatFiles.get(chat.id) || { uploads: [], generated_files: [] });
+  }
   Object.assign(state, { conversation_id: chat.id, messages: histories.get(chat.id) });
 }
 createServer(async (request, response) => {
@@ -37,11 +52,12 @@ createServer(async (request, response) => {
   if (url.pathname === '/api/auth/me') return json({ user: users.find(user => user.id === state.user_id) ?? null, guest: !!state.guest });
   if (url.pathname === '/api/auth/guest') {
     const guestToken = randomUUID();
-    sessions.set(guestToken, { user_id: null, conversation_id: null, guest: true, messages: [], uploads: [], generated_files: [] });
+    sessions.set(guestToken, { user_id: null, owner: `guest:${guestToken}`, conversation_id: null, guest: true, messages: [], uploads: [], generated_files: [] });
     return json({ user: null, guest: true, guest_token: guestToken });
   }
   if (url.pathname === '/api/auth/guest/close') return json({ ok: true });
   if (url.pathname === '/api/auth/logout') {
+    if (!state.guest) keepFiles(state);
     state.guest = false;
     Object.assign(state, { user_id: null, conversation_id: null, messages: [], uploads: [], generated_files: [] });
     return json({ user: null });
@@ -59,7 +75,7 @@ createServer(async (request, response) => {
     return json({ user });
   }
   if (url.pathname !== '/api/state' && !state.user_id && !state.guest) { response.statusCode = 401; return json({ detail: 'Log in to continue' }); }
-  if (url.pathname === '/api/state') return json({ ...state, conversations: list(state.user_id) });
+  if (url.pathname === '/api/state') return json({ ...state, conversations: list(owner(state)) });
   if (url.pathname === '/api/users') {
     if (request.method === 'POST') {
       const user = { id: users.length + 1, name: JSON.parse(body).name };
@@ -79,31 +95,32 @@ createServer(async (request, response) => {
   }
   if (url.pathname === '/api/conversations') {
     if (request.method === 'POST') {
-      if (state.guest) Object.assign(state, { conversation_id: null, messages: [], uploads: [], generated_files: [] });
-      const chat = createConversation(state.user_id);
+      const chat = newConversation(state);
       activate(state, chat);
       return json(chat);
     }
-    return json(list(state.user_id));
+    return json(list(owner(state)));
   }
   const action = url.pathname.match(/^\/api\/conversations\/(\d+)(\/select)?$/);
   if (action) {
-    const chat = conversations.find(chat => chat.id === Number(action[1]) && chat.user_id === state.user_id);
+    const chat = conversations.find(chat => chat.id === Number(action[1]) && chat.user_id === owner(state));
     if (!chat) return missing();
     if (action[2]) {
       activate(state, chat);
       return json(chat);
     }
     if (request.method === 'PATCH') {
-      Object.assign(chat, JSON.parse(body));
+      const changes = JSON.parse(body);
+      Object.assign(chat, changes, changes.title === undefined ? {} : { named: true });
       return json(chat);
     }
     if (request.method === 'DELETE') {
       conversations.splice(conversations.indexOf(chat), 1);
       histories.delete(chat.id);
+      chatFiles.delete(chat.id);
       if (state.conversation_id === chat.id) {
         Object.assign(state, { conversation_id: null, messages: [], uploads: [], generated_files: [] });
-        if (list(state.user_id).length) activate(state, list(state.user_id)[0]);
+        if (list(owner(state)).length) activate(state, list(owner(state))[0]);
       }
       return json({ ok: true });
     }
@@ -111,20 +128,29 @@ createServer(async (request, response) => {
   if (url.pathname === '/api/document' && request.method === 'POST') {
     const form = await new Response(body, { headers: { 'content-type': request.headers['content-type'] } }).formData();
     const file = form.get('file');
-    const upload = { id: randomUUID(), filename: file.name, status: 'Text ready for chat.', edits: [] };
+    if (file.name.startsWith('slow')) await new Promise(resolve => setTimeout(resolve, 1500));
+    if (!state.conversation_id) activate(state, newConversation(state));
+    const upload = { id: randomUUID(), filename: file.name, status: 'Text ready for chat.', sent: false, edits: [] };
     state.uploads.push(upload);
+    keepFiles(state);
     return json(upload);
   }
   if (url.pathname === '/api/document' && request.method === 'DELETE') {
     state.uploads = url.searchParams.has('file_id') ? state.uploads.filter(file => file.id !== url.searchParams.get('file_id')) : [];
+    keepFiles(state);
     return json({ ok: true });
   }
   if (url.pathname === '/api/chat') {
     const question = JSON.parse(body).message;
-    if (!state.conversation_id) activate(state, createConversation(state.user_id));
+    if (!state.conversation_id) activate(state, newConversation(state));
+    const current = conversations.find(chat => chat.id === state.conversation_id);
+    if (!state.messages.length && current && !current.named) Object.assign(current, { title: question.slice(0, 50), named: true });
     if (state.uploads.length) state.uploads[0].edits.push({ id: randomUUID(), filename: state.uploads[0].filename });
     state.generated_files.push({ id: randomUUID(), filename: 'result.txt' });
-    state.messages.push({ role: 'user', content: question }, { role: 'assistant', content: 'Edited the file.' });
+    keepFiles(state);
+    const attachments = state.uploads.filter(file => !file.sent).map(({ id, filename }) => ({ id, filename }));
+    for (const file of state.uploads) file.sent = true;
+    state.messages.push({ role: 'user', content: question, attachments }, { role: 'assistant', content: 'Edited the file.' });
     return json({ ...state, answer: 'Edited the file.', display_answer: 'Edited the file.', sources: [{ title: 'Evidence', url: 'https://example.com' }] });
   }
   if (url.pathname.endsWith('/download') || url.pathname.endsWith('/edited')) {

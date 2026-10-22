@@ -23,6 +23,9 @@ class WebTests(unittest.TestCase):
         sessions.clear()
         self.client = TestClient(app)
         self.database = mock_database(self)
+        self.title = patch('app.services.title.generate', return_value='')
+        self.title.start()
+        self.addCleanup(self.title.stop)
 
     def tearDown(self):
         self.client.close()

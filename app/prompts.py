@@ -10,5 +10,5 @@ TEMPLATES = Environment(
 )
 
 
-def render_prompt(filename: str, **values: str) -> str:
+def render_prompt(filename: str, **values: object) -> str:
     return TEMPLATES.get_template(filename).render(**values).strip()

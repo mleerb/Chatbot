@@ -8,6 +8,7 @@ class FakeDatabase:
         self.chats = {}
         self.next_chat = 1
         self.accounts = {}
+        self.files = {}
 
     def create_account(self, email, name, password_hash):
         if email in self.accounts:
@@ -61,6 +62,7 @@ class FakeDatabase:
             del self.chats[conversation_id]
             self.turns[user_id] = [item for item in self.turns[user_id]
                                    if item['conversation_id'] != conversation_id]
+            self.files = {key: item for key, item in self.files.items() if item['conversation_id'] != conversation_id}
         return chat
 
     def messages(self, user_id, limit=None, conversation_id=None):
@@ -69,18 +71,50 @@ class FakeDatabase:
         return [{key: value for key, value in item.items() if key != 'conversation_id'}
                 for item in (items[-limit:] if limit else items)]
 
-    def save_turn(self, user_id, question, answer, sources, conversation_id):
+    def save_turn(self, user_id, question, answer, sources, conversation_id, attachments=()):
         self.turns[user_id].extend([
-            {"role": "user", "content": question, "sources": [], "conversation_id": conversation_id},
-            {"role": "assistant", "content": answer, "sources": sources, "conversation_id": conversation_id},
+            {"role": "user", "content": question, "sources": [], "attachments": list(attachments),
+             "conversation_id": conversation_id},
+            {"role": "assistant", "content": answer, "sources": sources, "attachments": [],
+             "conversation_id": conversation_id},
         ])
+
+    def attached_file_ids(self, user_id, conversation_id):
+        return {item["id"] for turn in self.turns.get(user_id, []) if turn["conversation_id"] == conversation_id
+                for item in turn["attachments"]}
+
+    def save_file(self, user_id, conversation_id, kind, file_id, filename, data, document="", image_url="", status="",
+                  pages=(), parent_id=None):
+        self.files[file_id] = {
+            "user_id": user_id, "conversation_id": conversation_id, "file_id": file_id, "parent_id": parent_id,
+            "kind": kind, "filename": filename, "data": data, "document": document, "image_url": image_url,
+            "status": status, "pages": [list(page) for page in pages],
+        }
+
+    def update_file_text(self, user_id, file_id, document, image_url, status, pages):
+        item = self.files.get(file_id)
+        if item and item["user_id"] == user_id:
+            item.update(document=document, image_url=image_url, status=status, pages=[list(page) for page in pages])
+
+    def conversation_files(self, user_id, conversation_id):
+        return [{key: value for key, value in item.items() if key not in ("user_id", "conversation_id")}
+                for item in self.files.values()
+                if item["user_id"] == user_id and item["conversation_id"] == conversation_id]
+
+    def delete_files(self, user_id, conversation_id, file_id=None):
+        for key, item in list(self.files.items()):
+            if item["user_id"] != user_id or item["conversation_id"] != conversation_id:
+                continue
+            if (item["kind"] != "generated" if file_id is None else file_id in (item["file_id"], item["parent_id"])):
+                del self.files[key]
 
 
 def mock_database(test):
     database = FakeDatabase()
     patches = [patch(f"app.db.repository.{name}", getattr(database, name)) for name in
                ("create_account", "account_by_email", "users", "create_user", "get_user", "messages", "save_turn", "conversations",
-                "create_conversation", "get_conversation", "update_conversation", "delete_conversation")]
+                "create_conversation", "get_conversation", "update_conversation", "delete_conversation",
+                "save_file", "update_file_text", "conversation_files", "delete_files", "attached_file_ids")]
     patches.append(patch("app.db.repository.initialize"))
     for item in patches:
         item.start()

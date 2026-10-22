@@ -26,6 +26,11 @@ def initialize_schema(engine):
                     ") WHERE m.conversation_id IS NULL"
                 ))
                 connection.execute(text("ALTER TABLE chat_messages ALTER COLUMN conversation_id SET NOT NULL"))
+        if inspector.has_table("chat_messages") and "attachments" not in {
+            column["name"] for column in inspector.get_columns("chat_messages")
+        }:
+            kind = "JSONB" if connection.dialect.name == "postgresql" else "JSON"
+            connection.execute(text(f"ALTER TABLE chat_messages ADD COLUMN attachments {kind} NOT NULL DEFAULT '[]'"))
         Base.metadata.create_all(connection)
         for table in Base.metadata.sorted_tables:
             for index in table.indexes:
