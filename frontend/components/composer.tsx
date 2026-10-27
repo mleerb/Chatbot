@@ -8,14 +8,18 @@ type Props = {
   selected: boolean;
   guest: boolean;
   limited: boolean;
+  uploadLimited: boolean;
   uploads: Upload[];
   pending: string[];
+  streaming: boolean;
+  stopping: boolean;
+  onStop: () => void;
   onSend: (message: string) => Promise<void>;
   onUpload: (files: File[]) => Promise<void>;
   onRemove: (id?: string) => Promise<void>;
 };
 
-export default function Composer({ disabled, selected, guest, limited, uploads, pending, onSend, onUpload, onRemove }: Props) {
+export default function Composer({ disabled, selected, guest, limited, uploadLimited, uploads, pending, streaming, stopping, onStop, onSend, onUpload, onRemove }: Props) {
   const uploading = pending.length > 0;
   const unsent = uploads.filter(file => !file.sent);
   const [message, setMessage] = useState('');
@@ -40,7 +44,7 @@ export default function Composer({ disabled, selected, guest, limited, uploads, 
     <form className="composer" data-frozen={limited || undefined} onSubmit={submit}>
       <AttachedFiles uploads={unsent} pending={pending} disabled={disabled || uploading} onRemove={onRemove} />
       <label htmlFor="message" className="sr-only">Your message</label>
-      <textarea ref={input} id="message" name="message" placeholder={limited ? 'Guest limit reached. Log in or sign up to keep chatting.' : selected ? 'Message Aster…' : 'Log in to start chatting'}
+      <textarea ref={input} id="message" name="message" placeholder={limited ? (guest ? 'Guest limit reached. Log in or sign up to keep chatting.' : 'Daily limit reached. Chat opens again at midnight.') : selected ? 'Message Aster…' : 'Log in to start chatting'}
         rows={2} maxLength={10000} required disabled={disabled} value={message} onKeyDown={keyDown}
         onChange={event => {
           setMessage(event.target.value);
@@ -48,19 +52,21 @@ export default function Composer({ disabled, selected, guest, limited, uploads, 
           event.currentTarget.style.height = `${Math.min(event.currentTarget.scrollHeight, 180)}px`;
         }} />
       <div className="composer-toolbar">
-        <input ref={fileInput} type="file" aria-label="Choose files" multiple hidden disabled={disabled || uploading}
+        <input ref={fileInput} type="file" aria-label="Choose files" multiple hidden disabled={disabled || uploading || uploadLimited}
           onChange={event => {
             const files = Array.from(event.currentTarget.files || []);
             event.currentTarget.value = '';
             if (files.length) void onUpload(files);
           }} />
-        <button type="button" className="attach-button" aria-label="Attach files" disabled={disabled || uploading}
+        <button type="button" className="attach-button" aria-label="Attach files" disabled={disabled || uploading || uploadLimited}
           onClick={() => fileInput.current?.click()}><Icon name="attach" /><span>Attach files</span></button>
-        <button type="submit" className="send-button" aria-label="Send message" disabled={disabled || uploading || !message.trim()}>
+        {streaming ? <button type="button" className="send-button" aria-label="Stop answer" disabled={stopping} onClick={onStop}>
+          <Icon name="stop" /><span>{stopping ? 'Stopping…' : 'Stop'}</span>
+        </button> : <button type="submit" className="send-button" aria-label="Send message" disabled={disabled || uploading || !message.trim()}>
           <Icon name="send" /><span>{uploading ? 'Uploading…' : 'Send'}</span>
-        </button>
+        </button>}
       </div>
     </form>
-    <p className="composer-note">{uploading ? 'You can keep typing while files upload.' : unsent.length ? `${unsent.length} ${unsent.length === 1 ? 'file' : 'files'} will be sent with your message. ${guest ? 'Guest files last while this tab is open.' : 'Files are saved with this conversation.'}` : 'AI can make mistakes. Review important information.'}</p>
+    <p className="composer-note">{uploading ? 'You can keep typing while files upload.' : unsent.length ? `${unsent.length} ${unsent.length === 1 ? 'file' : 'files'} will be sent with your message. ${guest ? 'Guest files last while this tab is open.' : 'Files are saved with this conversation.'}` : uploadLimited && !limited ? 'You’ve used today’s file uploads. You can attach more files after midnight.' : 'AI can make mistakes. Review important information.'}</p>
   </div>;
 }

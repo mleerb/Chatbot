@@ -1,7 +1,7 @@
 from sqlalchemy import delete, select, update
 
 from app.db.connection import get_engine, session
-from app.db.models import Account, ChatFile, Conversation, Message, User
+from app.db.models import Account, ChatFile, Conversation, Message, Usage, User
 from app.db.schema import initialize_schema
 
 
@@ -109,6 +109,11 @@ def delete_conversation(user_id, conversation_id):
         return {"id": identifier} if identifier is not None else None
 
 
+def message_data(item):
+    return {"role": item.role, "content": item.content, "sources": item.sources, "attachments": item.attachments,
+            "stopped": item.stopped, "rating": item.rating, "trace_id": item.trace_id}
+
+
 def messages(user_id, limit=None, conversation_id=None):
     query = select(Message).where(Message.user_id == user_id)
     if conversation_id is not None:
@@ -117,18 +122,43 @@ def messages(user_id, limit=None, conversation_id=None):
     if limit is not None:
         query = query.limit(limit)
     with session() as database:
-        rows = [{"role": item.role, "content": item.content, "sources": item.sources,
-                 "attachments": item.attachments} for item in database.scalars(query)]
+        rows = [message_data(item) for item in database.scalars(query)]
         return rows if limit is None else rows[::-1]
 
 
-def save_turn(user_id, question, answer, sources, conversation_id, attachments=()):
+def message_at(database, user_id, conversation_id, index):
+    if index < 0:
+        return None
+    return database.scalar(select(Message).where(
+        Message.user_id == user_id, Message.conversation_id == conversation_id
+    ).order_by(Message.id).offset(index).limit(1))
+
+
+def save_turn(user_id, question, answer, sources, conversation_id, attachments=(), answer_attachments=(),
+              stopped=False, trace_id=None, replace_from=None):
     with session() as database:
+        if replace_from is not None:
+            first = message_at(database, user_id, conversation_id, replace_from)
+            if first is None or first.role != "user":
+                raise LookupError("Message not found")
+            database.execute(delete(Message).where(
+                Message.user_id == user_id, Message.conversation_id == conversation_id, Message.id >= first.id
+            ))
         database.add_all([
             Message(user_id=user_id, conversation_id=conversation_id, role="user", content=question, sources=[],
                     attachments=list(attachments)),
-            Message(user_id=user_id, conversation_id=conversation_id, role="assistant", content=answer, sources=sources),
+            Message(user_id=user_id, conversation_id=conversation_id, role="assistant", content=answer, sources=sources,
+                    attachments=list(answer_attachments), stopped=stopped, trace_id=trace_id),
         ])
+
+
+def rate_message(user_id, conversation_id, index, rating):
+    with session() as database:
+        item = message_at(database, user_id, conversation_id, index)
+        if item is None or item.role != "assistant":
+            return None
+        item.rating = rating
+        return {"trace_id": item.trace_id}
 
 
 def attached_file_ids(user_id, conversation_id):
@@ -141,24 +171,33 @@ def attached_file_ids(user_id, conversation_id):
 
 def file_data(item):
     return {key: getattr(item, key) for key in (
-        "file_id", "parent_id", "kind", "filename", "data", "document", "image_url", "status", "pages",
+        "file_id", "parent_id", "kind", "filename", "data", "document", "image_url", "status", "pages", "embeddings",
     )}
 
 
 def save_file(user_id, conversation_id, kind, file_id, filename, data, document="", image_url="", status="",
-              pages=(), parent_id=None):
+              pages=(), parent_id=None, embeddings=None):
     with session() as database:
         database.add(ChatFile(
             user_id=user_id, conversation_id=conversation_id, kind=kind, file_id=file_id, filename=filename,
             data=data, document=document, image_url=image_url, status=status, pages=[list(page) for page in pages],
-            parent_id=parent_id,
+            parent_id=parent_id, embeddings=embeddings,
         ))
 
 
-def update_file_text(user_id, file_id, document, image_url, status, pages):
+def update_file_text(user_id, file_id, document, image_url, status, pages, embeddings=None):
     with session() as database:
         database.execute(update(ChatFile).where(ChatFile.user_id == user_id, ChatFile.file_id == file_id).values(
-            document=document, image_url=image_url, status=status, pages=[list(page) for page in pages]))
+            document=document, image_url=image_url, status=status, pages=[list(page) for page in pages],
+            embeddings=embeddings))
+
+
+def update_file_embeddings(user_id, conversation_id, file_id, document, embeddings):
+    with session() as database:
+        return database.execute(update(ChatFile).where(
+            ChatFile.user_id == user_id, ChatFile.conversation_id == conversation_id,
+            ChatFile.file_id == file_id, ChatFile.kind == "upload", ChatFile.document == document,
+        ).values(embeddings=embeddings)).rowcount
 
 
 def conversation_files(user_id, conversation_id):
@@ -177,3 +216,56 @@ def delete_files(user_id, conversation_id, file_id=None):
         query = query.where((ChatFile.file_id == file_id) | (ChatFile.parent_id == file_id))
     with session() as database:
         database.execute(query)
+
+
+def usage(user_id):
+    with session() as database:
+        item = database.get(Usage, user_id)
+        return ({"tokens": item.tokens, "uploads": item.uploads, "images": item.images,
+                 "window_start": item.window_start} if item is not None else None)
+
+
+def add_usage(user_id, tokens, day_start):
+    with session() as database:
+        added = database.execute(
+            update(Usage).where(Usage.user_id == user_id, Usage.window_start >= day_start)
+            .values(tokens=Usage.tokens + tokens)
+        ).rowcount
+        if not added:
+            database.merge(Usage(user_id=user_id, tokens=tokens, uploads=0, images=0, window_start=day_start))
+
+
+COUNTERS = ("uploads", "images")
+
+
+def add_count(user_id, name, day_start, limit):
+    if name not in COUNTERS:
+        raise ValueError(f"Unknown usage counter: {name}")
+    column = getattr(Usage, name)
+    with session() as database:
+        if database.execute(
+            update(Usage).where(Usage.user_id == user_id, Usage.window_start >= day_start, column < limit)
+            .values({column: column + 1})
+        ).rowcount:
+            return True
+        fresh = {"tokens": 0, "uploads": 0, "images": 0, name: 1}
+        if database.execute(
+            update(Usage).where(Usage.user_id == user_id, Usage.window_start < day_start)
+            .values(window_start=day_start, **fresh)
+        ).rowcount:
+            return True
+        if database.get(Usage, user_id) is not None or limit < 1:
+            return False
+        database.add(Usage(user_id=user_id, window_start=day_start, **fresh))
+        return True
+
+
+def remove_count(user_id, name, day_start):
+    if name not in COUNTERS:
+        raise ValueError(f"Unknown usage counter: {name}")
+    column = getattr(Usage, name)
+    with session() as database:
+        database.execute(
+            update(Usage).where(Usage.user_id == user_id, Usage.window_start >= day_start, column > 0)
+            .values({column: column - 1})
+        )

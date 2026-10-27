@@ -9,12 +9,14 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_PYTHON_DOWNLOADS=never \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    TIKTOKEN_CACHE_DIR=/app/.tiktoken \
     PATH="/app/.venv/bin:$PATH"
 
 WORKDIR /app
 
 COPY pyproject.toml uv.lock .python-version ./
-RUN uv sync --locked --no-dev --no-install-project
+RUN uv sync --locked --no-dev --no-install-project \
+    && .venv/bin/python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
 
 RUN groupadd --system chatbot && useradd --system --gid chatbot --create-home chatbot
 COPY --chown=chatbot:chatbot app ./app

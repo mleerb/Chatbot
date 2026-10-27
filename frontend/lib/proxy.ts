@@ -29,7 +29,7 @@ export async function proxy(request: Request): Promise<Response> {
     const outgoing = cleanHeaders(upstream.headers);
     outgoing.delete('content-encoding');
     outgoing.delete('content-length');
-    outgoing.set('cache-control', 'no-store');
+    outgoing.set('cache-control', upstream.headers.get('content-type')?.startsWith('text/event-stream') ? 'no-store, no-transform' : 'no-store');
     return new Response(upstream.body, { status: upstream.status, headers: outgoing });
   } catch {
     return Response.json({ detail: 'Backend unavailable. Check that FastAPI is running.' }, {

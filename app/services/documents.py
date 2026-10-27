@@ -3,7 +3,7 @@ from pathlib import Path
 
 from app.core.errors import ServiceError
 from app.db import repository
-from app.services import guest, storage
+from app.services import embed, guest, images, quota, storage
 from app.services.conversations import activate, ensure_active
 from app.services.extract import upload_context
 from app.services.sessions import ChatSession, Upload
@@ -16,12 +16,19 @@ def upload(session: ChatSession, filename: str, data: bytes):
     if not filename:
         raise ServiceError(400, "Choose a file")
     if session.guest:
-        guest.check_limit(session)
+        guest.check_upload(session)
+    else:
+        quota.check_upload(session.user_id)
     text, image_url, status, pages = upload_context(filename, data, session.parsed)
     item = Upload(filename, data, text, image_url, status, pages=pages)
+    embed.prepare(item)
     with session.lock:
         if session.user_id is None and not session.guest:
             raise ServiceError(400, "Log in or continue as guest")
+        if session.guest:
+            guest.take_upload(session)
+        else:
+            quota.take_upload(session.user_id)
         ensure_active(session)
         if session.conversation_id is None:
             if session.guest:
@@ -67,6 +74,14 @@ def generated(session: ChatSession, file_id: str | None = None) -> tuple[str, by
         item = session.generated.get(file_id) if file_id is not None else session.latest_generated
         if item is None:
             raise ServiceError(404, "Generated file not found")
+        return item.filename, item.data
+
+
+def generated_image(session: ChatSession, file_id: str) -> tuple[str, bytes]:
+    with session.lock:
+        item = session.generated.get(file_id)
+        if item is None or not images.is_png(item.filename, item.data):
+            raise ServiceError(404, "Image not found")
         return item.filename, item.data
 
 

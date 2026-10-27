@@ -1,4 +1,9 @@
+import logging
 import re
+
+import numpy as np
+
+from app.services import embed, storage
 
 from app.prompts import render_prompt
 from app.services.sessions import Page, Upload
@@ -11,6 +16,9 @@ MAX_OUTLINE = 50
 PREVIEW_CHARS = 80
 SNIPPET_CHARS = 120
 MAX_RESULTS = 5
+RRF_K = 60
+CANDIDATES = 50
+logger = logging.getLogger(__name__)
 
 
 def estimate_tokens(text: str) -> int:
@@ -103,21 +111,86 @@ def snippet(text: str, needles: list[str]) -> str:
     return ("…" if begin else "") + excerpt
 
 
-def search(item: Upload, query: str) -> str:
-    phrase = " ".join(query.lower().split())
-    terms = [term for term in re.findall(r"\w+", phrase) if len(term) > 1]
-    if not terms:
-        return "Give a search query with at least one word of two or more letters."
+def keyword_ranking(entries, phrase: str, terms: list[str]):
     scored = []
-    for number, page in enumerate(item.pages, 1):
+    for index, (_, _, page) in enumerate(entries):
         lower = page.text.lower()
         score = lower.count(phrase) * 10 + sum(lower.count(term) for term in terms)
         if score:
-            scored.append((score, number))
-    best = sorted(scored, key=lambda entry: (-entry[0], entry[1]))[:MAX_RESULTS]
-    results = [{"number": number, "label": label_for(item, number),
-                "snippet": snippet(item.pages[number - 1].text, [phrase, *terms])} for _, number in best]
-    return render_prompt(
-        "search.j2", upload_name=item.filename, file_id=item.id, query=query, page_count=len(item.pages),
-        match_count=len(scored), results=results,
-    )
+            scored.append((score, index))
+    return [index for _, index in sorted(scored, key=lambda row: (-row[0], row[1]))]
+
+
+def fuse(rankings: list[list[int]]) -> list[int]:
+    scores = {}
+    for ranking in rankings:
+        for rank, index in enumerate(ranking[:CANDIDATES], 1):
+            scores[index] = scores.get(index, 0) + 1 / (RRF_K + rank)
+    return sorted(scores, key=lambda index: (-scores[index], index))
+
+
+def ranked(items: list[Upload], query: str, session=None):
+    phrase = " ".join(query.lower().split())
+    terms = [term for term in re.findall(r"\w+", phrase) if len(term) > 1]
+    entries = [(item, number, page) for item in items for number, page in enumerate(item.pages, 1)]
+    keywords = keyword_ranking(entries, phrase, terms)
+    semantic = []
+    embedded_files = set()
+    reason = "embeddings disabled or provider key missing"
+    if session is not None and embed.available():
+        config = embed.settings()
+        for item in items:
+            if is_large(item):
+                changed = embed.prepare(item)
+                if changed or item.embeddings_dirty:
+                    try:
+                        storage.save_embeddings(session, item)
+                        item.embeddings_dirty = False
+                    except Exception:
+                        logger.warning("Could not persist file embeddings; will retry on a later search")
+        vectors, indices = [], []
+        for index, (item, number, page) in enumerate(entries):
+            if number == 1:
+                decoded = embed.unpack(item.embeddings, config)
+                if decoded is not None and decoded[0] != [embed.text_hash(part.text) for part in item.pages]:
+                    decoded = None
+            if decoded is not None:
+                vectors.append(decoded[1][number - 1])
+                indices.append(index)
+                embedded_files.add(item.id)
+        reason = "file embeddings unavailable"
+        if vectors:
+            try:
+                vector = embed.query_vector(session, query, config)
+                similarities = embed.cosine(np.asarray(vectors), vector)
+                order = np.argsort(-similarities, kind="stable")[:CANDIDATES]
+                semantic = [indices[int(index)] for index in order]
+                reason = ""
+            except Exception:
+                reason = "query embedding failed"
+                logger.warning("Query embedding unavailable; using keyword search")
+    ranking = fuse([keywords, semantic]) if semantic else keywords
+    best = ranking[:MAX_RESULTS]
+    results = []
+    for index in best:
+        item, number, page = entries[index]
+        results.append({"number": number, "label": label_for(item, number), "filename": item.filename,
+                        "file_id": item.id, "snippet": snippet(page.text, [phrase, *terms]),
+                        "method": "meaning + keywords" if index in semantic and index in keywords[:CANDIDATES]
+                        else "meaning" if index in semantic else "keywords"})
+    partial = bool(semantic) and len(embedded_files) < len(items)
+    mode = "Hybrid search" if semantic else "Keyword search"
+    fallback = ("Some files have no compatible embeddings; those files use keywords only." if partial else
+                f"Keyword-only fallback: {reason}." if not semantic else "")
+    return {"query": query, "page_count": len(entries), "match_count": len(set(keywords) | set(semantic)),
+            "results": results, "mode": mode, "fallback": fallback}
+
+
+def search_many(items: list[Upload], query: str, session=None) -> str:
+    if not any(len(term) > 1 for term in re.findall(r"\w+", query)):
+        return "Give a search query with at least one word of two or more letters."
+    return render_prompt("search.j2", **ranked(items, query, session))
+
+
+def search(item: Upload, query: str) -> str:
+    return search_many([item], query)

@@ -17,8 +17,8 @@ class PageRequest(BaseModel):
 
 
 class SearchRequest(BaseModel):
-    query: str = Field(description="Words or a short phrase to find in the file")
-    file_id: str = Field(default="", description=FILE_ID)
+    query: str = Field(description="Question, concept, words or a short phrase to find in uploaded files")
+    file_id: str = Field(default="", description="Uploaded file ID; omit to search all large files in this conversation")
 
 
 def find_upload(token: str, file_id: str) -> Upload | str:
@@ -55,10 +55,22 @@ def create_page_tools(token: str) -> list:
 
     @tool(
         args_schema=SearchRequest,
-        description="Keyword search in an uploaded file. Returns the best-matching page numbers with short snippets; read a page with read_page before relying on it.",
+        description="Search uploaded pages by meaning and keywords, with keyword-only fallback. Omit file_id to search all large files in the current conversation. Returns the best 5 pages, filenames, file IDs and snippets; read_page with the returned file_id before relying on a page.",
     )
     def search_in_file(query: str, file_id: str = "") -> str:
-        item = find_upload(token, file_id)
-        return item if isinstance(item, str) else pages.search(item, query)
+        with sessions_lock:
+            session = sessions.get(token)
+        if session is None:
+            return "Session expired; no file was read."
+        if file_id:
+            item = find_upload(token, file_id)
+            if isinstance(item, str):
+                return item
+            items = [item]
+        else:
+            items = [item for item in session.uploads.values() if item.pages and pages.is_large(item)]
+            if not items:
+                return "No large readable files in this conversation. Small files are already included in full."
+        return pages.search_many(items, query, session)
 
     return [get_outline, read_page, search_in_file]

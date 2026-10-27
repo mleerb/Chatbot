@@ -6,7 +6,12 @@ const users = [{ id: 1, name: 'Tester', email: 'tester@example.com' }, { id: 2, 
 const conversations = [];
 const histories = new Map();
 const chatFiles = new Map();
+const limits = new Map();
+const uploadCounts = new Map();
+const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
+const imageNames = new Map();
 let nextConversation = 1;
+let answerCount = 0;
 function owner(state) {
   return state.guest ? state.owner : state.user_id;
 }
@@ -26,10 +31,18 @@ function newConversation(state) {
   Object.assign(state, { conversation_id: null, uploads: [], generated_files: [] });
   return createConversation(owner(state), 'Temporary chat');
 }
+function resetsAt(state) {
+  const reset = state.guest ? state.guest_limited && new Date(Date.now() + 3600000).toISOString() : limits.get(state.user_id);
+  return reset && Date.parse(reset) > Date.now() ? reset : null;
+}
+function uploadResetsAt(state) {
+  const limited = !state.guest && users.find(user => user.id === state.user_id)?.email?.startsWith('uploads-') && (uploadCounts.get(state.user_id) ?? 0) >= 5;
+  return limited ? new Date(Date.now() + 3600000).toISOString() : null;
+}
 function overLimit(state, response) {
-  if (!state.guest || !state.guest_limited) return false;
+  if (state.guest ? !state.guest_limited : !resetsAt(state)) return false;
   response.statusCode = 403;
-  response.end(JSON.stringify({ detail: 'Guest limit reached. Log in or sign up to keep chatting.' }));
+  response.end(JSON.stringify({ detail: state.guest ? 'Guest limit reached. Log in or sign up to keep chatting.' : 'Daily limit reached.' }));
   return true;
 }
 function list(userId) {
@@ -44,6 +57,40 @@ function activate(state, chat) {
     Object.assign(state, chatFiles.get(chat.id) || { uploads: [], generated_files: [] });
   }
   Object.assign(state, { conversation_id: chat.id, messages: histories.get(chat.id) });
+}
+function pause(milliseconds) {
+  return new Promise(resolve => setTimeout(resolve, milliseconds));
+}
+function replyFor(question) {
+  const answers = {
+    table: '| Plan | Price |\n| --- | --- |\n| Basic | $5 |\n| Pro | $9 |',
+    code: 'Run this:\n\n```python\nprint("hi")\n```\n\n<b>raw html</b> [bad](javascript:alert(1)) ![tracker](https://example.com/x.png) [good](https://example.com/docs)',
+  };
+  if (question.startsWith('Draw')) return 'Here is your watercolor cat.';
+  if (question.startsWith('Slow')) return 'This answer arrives one slow word at a time so it can be stopped early.';
+  if (question.startsWith('Again')) return `Answer number ${++answerCount}.`;
+  return answers[Object.keys(answers).find(kind => question.toLowerCase().includes(`as a ${kind}`))] ?? 'Edited the file.';
+}
+function finishTurn(state, question, replaceFrom, reply, stopped) {
+  const current = conversations.find(chat => chat.id === state.conversation_id);
+  if ((replaceFrom === 0 || !state.messages.length) && current && !current.named) Object.assign(current, { title: question.slice(0, 50), named: true });
+  if (state.uploads.length) state.uploads[0].edits.push({ id: randomUUID(), filename: state.uploads[0].filename });
+  state.generated_files.push({ id: randomUUID(), filename: 'result.txt' });
+  const kept = replaceFrom === null ? [] : state.messages[replaceFrom].attachments ?? [];
+  const attachments = [...kept, ...state.uploads.filter(file => !file.sent && !kept.some(item => item.id === file.id)).map(({ id, filename }) => ({ id, filename }))];
+  for (const file of state.uploads) file.sent = true;
+  const images = question.startsWith('Draw') && !stopped ? [{ id: randomUUID(), filename: 'watercolor-cat.png' }] : [];
+  for (const image of images) { imageNames.set(image.id, image.filename); state.generated_files.push(image); }
+  keepFiles(state);
+  if (replaceFrom !== null) state.messages.splice(replaceFrom);
+  state.messages.push({ role: 'user', content: question, attachments }, { role: 'assistant', content: reply, attachments: images, stopped, rating: null, sources: [{ title: 'Evidence', url: 'https://example.com' }] });
+  if (state.guest) {
+    state.guest_tokens += question.startsWith('Use every token') ? 50000 : Math.ceil((question.length + 16) / 4);
+    state.guest_limited = state.guest_tokens >= 50000;
+  } else if (question.startsWith('Use every token')) {
+    limits.set(state.user_id, new Date(Date.now() + 6000).toISOString());
+  }
+  return { ...state, attachments: images, stopped, limit_resets_at: resetsAt(state), answer: reply, display_answer: reply, sources: [{ title: 'Evidence', url: 'https://example.com' }] };
 }
 createServer(async (request, response) => {
   const url = new URL(request.url, 'http://localhost');
@@ -87,7 +134,7 @@ createServer(async (request, response) => {
     return json({ user });
   }
   if (url.pathname !== '/api/state' && !state.user_id && !state.guest) { response.statusCode = 401; return json({ detail: 'Log in to continue' }); }
-  if (url.pathname === '/api/state') return json({ ...state, conversations: list(owner(state)) });
+  if (url.pathname === '/api/state') return json({ ...state, conversations: list(owner(state)), limit_resets_at: resetsAt(state), upload_resets_at: uploadResetsAt(state) });
   if (url.pathname === '/api/users') {
     if (request.method === 'POST') {
       const user = { id: users.length + 1, name: JSON.parse(body).name };
@@ -139,6 +186,8 @@ createServer(async (request, response) => {
   }
   if (url.pathname === '/api/document' && request.method === 'POST') {
     if (overLimit(state, response)) return;
+    if (uploadResetsAt(state)) { response.statusCode = 403; return json({ detail: 'Daily upload limit reached (5 files a day). You can upload more files after midnight.' }); }
+    if (!state.guest) uploadCounts.set(state.user_id, (uploadCounts.get(state.user_id) ?? 0) + 1);
     const form = await new Response(body, { headers: { 'content-type': request.headers['content-type'] } }).formData();
     const file = form.get('file');
     if (file.name.startsWith('slow')) await new Promise(resolve => setTimeout(resolve, 1500));
@@ -159,28 +208,52 @@ createServer(async (request, response) => {
     response.setHeader('content-disposition', `attachment; filename="aster-answer.${payload.format}"`);
     return response.end(payload.content);
   }
-  if (url.pathname === '/api/chat') {
-    const question = JSON.parse(body).message;
+  if (url.pathname === '/api/chat' || url.pathname === '/api/chat/stream') {
+    const payload = JSON.parse(body);
     if (overLimit(state, response)) return;
     if (!state.conversation_id) activate(state, newConversation(state));
-    const current = conversations.find(chat => chat.id === state.conversation_id);
-    if (!state.messages.length && current && !current.named) Object.assign(current, { title: question.slice(0, 50), named: true });
-    if (state.uploads.length) state.uploads[0].edits.push({ id: randomUUID(), filename: state.uploads[0].filename });
-    state.generated_files.push({ id: randomUUID(), filename: 'result.txt' });
-    keepFiles(state);
-    const attachments = state.uploads.filter(file => !file.sent).map(({ id, filename }) => ({ id, filename }));
-    for (const file of state.uploads) file.sent = true;
-    const answers = {
-      table: '| Plan | Price |\n| --- | --- |\n| Basic | $5 |\n| Pro | $9 |',
-      code: 'Run this:\n\n```python\nprint("hi")\n```\n\n<b>raw html</b> [bad](javascript:alert(1)) ![tracker](https://example.com/x.png) [good](https://example.com/docs)',
-    };
-    const reply = answers[Object.keys(answers).find(kind => question.toLowerCase().includes(`as a ${kind}`))] ?? 'Edited the file.';
-    state.messages.push({ role: 'user', content: question, attachments }, { role: 'assistant', content: reply });
-    if (state.guest) {
-      state.guest_tokens += question.startsWith('Use every token') ? 50000 : Math.ceil((question.length + 16) / 4);
-      state.guest_limited = state.guest_tokens >= 50000;
+    const replaceFrom = payload.replace_from ?? null;
+    if (replaceFrom !== null && state.messages[replaceFrom]?.role !== 'user') return missing();
+    const reply = replyFor(payload.message);
+    if (url.pathname === '/api/chat') return json(finishTurn(state, payload.message, replaceFrom, reply, false));
+    response.setHeader('content-type', 'text/event-stream');
+    const send = event => response.write(`data: ${JSON.stringify(event)}\n\n`);
+    Object.assign(state, { streaming: true, stopRequested: false });
+    if (state.uploads.some(file => !file.sent)) {
+      send({ type: 'text', text: 'Let me look. ' });
+      await pause(100);
+      send({ type: 'step', label: `Reading ${state.uploads.find(file => !file.sent).filename}` });
+      await pause(payload.message.startsWith('Slow') ? 1000 : 150);
     }
-    return json({ ...state, answer: reply, display_answer: reply, sources: [{ title: 'Evidence', url: 'https://example.com' }] });
+    let written = '';
+    for (const part of reply.match(/\S+\s*/g) ?? [reply]) {
+      if (state.stopRequested) break;
+      send({ type: 'text', text: part });
+      written += part;
+      await pause(payload.message.startsWith('Slow') ? 400 : 10);
+    }
+    const stopped = state.stopRequested;
+    state.streaming = false;
+    send({ type: 'done', ...finishTurn(state, payload.message, replaceFrom, stopped ? written.trim() : reply, stopped) });
+    return response.end();
+  }
+  if (url.pathname === '/api/chat/stop') {
+    state.stopRequested = !!state.streaming;
+    return json({ stopped: state.stopRequested });
+  }
+  if (url.pathname === '/api/chat/rating') {
+    const { index, rating } = JSON.parse(body);
+    const item = state.messages[index];
+    if (item?.role !== 'assistant') return missing();
+    item.rating = rating;
+    return json({ rating });
+  }
+  const imageName = imageNames.get(url.searchParams.get('file_id'));
+  if (url.pathname === '/api/files/view' || (url.pathname === '/api/files/download' && imageName)) {
+    if (!imageName) return missing();
+    response.setHeader('content-type', url.pathname.endsWith('/view') ? 'image/png' : 'application/octet-stream');
+    if (url.pathname.endsWith('/download')) response.setHeader('content-disposition', `attachment; filename="${imageName}"`);
+    return response.end(pixel);
   }
   if (url.pathname.endsWith('/download') || url.pathname.endsWith('/edited')) {
     response.setHeader('content-type', 'application/octet-stream');

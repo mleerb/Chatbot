@@ -48,10 +48,10 @@ class SearchTests(unittest.TestCase):
 
     def test_agent_exposes_search_only_when_configured(self):
         with patch('app.services.agent.chat_model', return_value='openai:test'), patch('app.services.agent.create_deep_agent', return_value=object()) as factory:
-            with patch.dict(os.environ, {"TAVILY_API_KEY": ""}):
+            with patch.dict(os.environ, {"TAVILY_API_KEY": "", "IMAGE_MODEL": ""}):
                 make_agent('token', 'question', [])
                 self.assertEqual(len(factory.call_args.kwargs['tools']), 5)
-            with patch.dict(os.environ, {"TAVILY_API_KEY": "test-key"}):
+            with patch.dict(os.environ, {"TAVILY_API_KEY": "test-key", "IMAGE_MODEL": ""}):
                 make_agent('token', 'question', [])
                 self.assertEqual(len(factory.call_args.kwargs['tools']), 6)
 

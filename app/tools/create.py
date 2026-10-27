@@ -29,7 +29,7 @@ def validate_file(filename: str, content: str) -> tuple[str, bytes]:
 def create_file_tool(token: str):
     @tool(
         args_schema=CreatedFile,
-        description="Create a real downloadable text, .docx, .pdf, .xlsx, .pptx or .zip file. For .docx/.pdf use plain text or JSON {'blocks':[{'type':'heading'|'paragraph','text':'...'}, {'type':'table','rows':[['A','B']]}]}. For .xlsx use {'sheets':[{'name':'Sheet1','rows':[['A',1]]}]}; .pptx use {'slides':[{'title':'Title','body':'Text'}]}; .zip use {'entries':[{'name':'notes.txt','content':'Text'}]}. Do not generate images or executables.",
+        description="Create a real downloadable text, .docx, .pdf, .xlsx, .pptx or .zip file. For .docx/.pdf use plain text or JSON {'blocks':[{'type':'heading'|'paragraph','text':'...'}, {'type':'table','rows':[['A','B']]}]}. For .xlsx use {'sheets':[{'name':'Sheet1','rows':[['A',1]]}]}; .pptx use {'slides':[{'title':'Title','body':'Text'}]}; .zip use {'entries':[{'name':'notes.txt','content':'Text'}]}. For images use generate_image instead; do not generate executables.",
     )
     def create_text_file(filename: str, content: str) -> str:
         try:

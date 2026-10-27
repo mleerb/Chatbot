@@ -21,6 +21,7 @@ def load(session: ChatSession):
             session.uploads[row["file_id"]] = Upload(
                 row["filename"], row["data"], row["document"], row["image_url"], row["status"], id=row["file_id"],
                 pages=[Page(label, text) for label, text in row["pages"]], sent=row["file_id"] in sent,
+                embeddings=row.get("embeddings"),
             )
         elif row["kind"] == "generated":
             session.generated[row["file_id"]] = Download(row["filename"], row["data"], id=row["file_id"])
@@ -31,7 +32,8 @@ def load(session: ChatSession):
 def save_upload(session: ChatSession, item: Upload):
     if persistent(session):
         repository.save_file(session.user_id, session.conversation_id, "upload", item.id, item.filename, item.data,
-                             item.document, item.image_url, item.status, page_rows(item))
+                             item.document, item.image_url, item.status, page_rows(item), embeddings=item.embeddings)
+    item.embeddings_dirty = False
 
 
 def save_revision(session: ChatSession, item: Upload, revision: Download):
@@ -39,7 +41,14 @@ def save_revision(session: ChatSession, item: Upload, revision: Download):
         repository.save_file(session.user_id, session.conversation_id, "revision", revision.id, revision.filename,
                              revision.data, parent_id=item.id)
         repository.update_file_text(session.user_id, item.id, item.document, item.image_url, item.status,
-                                    page_rows(item))
+                                    page_rows(item), embeddings=item.embeddings)
+    item.embeddings_dirty = False
+
+
+def save_embeddings(session: ChatSession, item: Upload):
+    if persistent(session) and session.uploads.get(item.id) is item:
+        repository.update_file_embeddings(session.user_id, session.conversation_id, item.id,
+                                          item.document, item.embeddings)
 
 
 def save_generated(session: ChatSession, item: Download):

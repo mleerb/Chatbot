@@ -7,6 +7,13 @@ import { safeUrl } from '../lib/api';
 const server = createServer(async (request, response) => {
   const chunks: Buffer[] = [];
   for await (const chunk of request) chunks.push(Buffer.from(chunk));
+  if (request.url === '/api/chat/stream') {
+    response.setHeader('content-type', 'text/event-stream');
+    response.write('data: {"type":"text","text":"Hel"}\n\n');
+    await new Promise(resolve => setTimeout(resolve, 300));
+    response.end('data: {"type":"text","text":"lo"}\n\n');
+    return;
+  }
   response.setHeader('set-cookie', 'chat_session=test-token; HttpOnly; Path=/; SameSite=strict');
   response.setHeader('content-type', 'application/octet-stream');
   response.setHeader('content-disposition', 'attachment; filename="note.txt"');
@@ -87,4 +94,17 @@ test('source links allow only HTTP and HTTPS', () => {
   assert.equal(safeUrl('file:///private'), null);
   assert.equal(safeUrl('not a url'), null);
   assert.equal(safeUrl('https://example.com'), 'https://example.com/');
+});
+
+test('event streams pass through chunk by chunk without transformation', async () => {
+  const response = await proxy(new Request('http://frontend/api/chat/stream', { method: 'POST', body: '{}' }));
+  assert.equal(response.headers.get('cache-control'), 'no-store, no-transform');
+  const reader = response.body!.pipeThrough(new TextDecoderStream()).getReader();
+  const started = Date.now();
+  const first = await reader.read();
+  assert.match(first.value || '', /Hel/);
+  assert.ok(Date.now() - started < 250);
+  let rest = '';
+  for (let part = await reader.read(); !part.done; part = await reader.read()) rest += part.value;
+  assert.match(rest, /lo/);
 });

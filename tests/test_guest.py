@@ -1,12 +1,13 @@
 import unittest
 from contextlib import ExitStack
+from datetime import datetime, timedelta
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 from app.main import app
 from app.services.auth import attempts
-from app.services import guest
+from app.services import guest, quota
 from app.services.sessions import COOKIE, GUEST_COOKIE, sessions
 from tests.fake_database import mock_database
 
@@ -30,9 +31,9 @@ class GuestTests(unittest.TestCase):
         self.client.post('/api/auth/logout')
         self.no_database = ExitStack()
         for name in ('users', 'get_user', 'messages', 'conversations', 'create_user', 'create_conversation',
-                     'get_conversation', 'update_conversation', 'delete_conversation', 'save_turn',
+                     'get_conversation', 'update_conversation', 'delete_conversation', 'save_turn', 'rate_message',
                      'create_account', 'account_by_email', 'save_file', 'update_file_text', 'conversation_files',
-                     'delete_files', 'attached_file_ids'):
+                     'delete_files', 'attached_file_ids', 'usage', 'add_usage', 'add_count', 'remove_count'):
             self.no_database.enter_context(patch(f'app.db.repository.{name}', side_effect=AssertionError('Guest database access')))
         self.addCleanup(self.no_database.close)
 
@@ -157,7 +158,7 @@ class GuestTests(unittest.TestCase):
         self.assertTrue(self.client.get('/api/state').json()['guest_limited'])
         self.assertEqual(self.meter().tokens, 120)
 
-    def test_guest_limit_survives_closing_the_tab_for_24_hours(self):
+    def test_guest_limit_survives_closing_the_tab_until_midnight(self):
         self.start_guest()
         self.use_tokens(100)
         self.assertTrue(self.client.get('/api/state').json()['guest_limited'])
@@ -172,13 +173,37 @@ class GuestTests(unittest.TestCase):
         del self.client.headers['x-guest-session']
         self.start_guest()
         self.assertTrue(self.client.get('/api/state').json()['guest_limited'])
-        blocked_until = self.meter().blocked_until
-        with patch('app.services.guest.time.time', return_value=blocked_until - 1):
+        state = self.client.get('/api/state').json()
+        self.assertEqual(datetime.fromisoformat(state['limit_resets_at']), quota.next_midnight())
+        late = quota.midnight(quota.today() + timedelta(days=1)) - timedelta(seconds=1)
+        with patch('app.services.quota.now', return_value=late):
             self.assertTrue(self.client.get('/api/state').json()['guest_limited'])
-        with patch('app.services.guest.time.time', return_value=blocked_until):
-            self.assertFalse(self.client.get('/api/state').json()['guest_limited'])
+        with patch('app.services.quota.now', return_value=late + timedelta(seconds=1)):
+            state = self.client.get('/api/state').json()
+            self.assertFalse(state['guest_limited'])
+            self.assertIsNone(state['limit_resets_at'])
             self.assertEqual(self.meter().tokens, 0)
             self.assertEqual(self.use_tokens(10).status_code, 200)
+
+    def test_guest_upload_limit_is_per_browser_and_resets_at_midnight(self):
+        self.start_guest()
+        with patch('app.services.quota.UPLOAD_LIMIT', 2):
+            for _ in range(2):
+                self.assertEqual(self.client.post('/api/document', files={'file': ('note.txt', b'x')}).status_code, 200)
+            blocked = self.client.post('/api/document', files={'file': ('note.txt', b'x')})
+            self.assertEqual(blocked.status_code, 403)
+            self.assertEqual(blocked.json()['detail'], quota.UPLOAD_LIMIT_MESSAGE)
+            self.assertIsNotNone(self.client.get('/api/state').json()['upload_resets_at'])
+            self.assertIsNone(self.client.get('/api/state').json()['limit_resets_at'])
+            self.assertEqual(self.send().status_code, 200)
+            self.client.post('/api/auth/logout')
+            del self.client.headers['x-guest-session']
+            self.start_guest()
+            self.assertEqual(self.client.post('/api/document', files={'file': ('note.txt', b'x')}).status_code, 403)
+            with patch('app.services.quota.now', return_value=quota.next_midnight()):
+                self.assertIsNone(self.client.get('/api/state').json()['upload_resets_at'])
+                self.assertEqual(self.client.post('/api/document', files={'file': ('note.txt', b'x')}).status_code, 200)
+            self.assertEqual(self.meter().uploads, 1)
 
     def test_guest_limit_is_per_browser(self):
         self.start_guest()

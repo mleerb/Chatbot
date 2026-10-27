@@ -1,18 +1,26 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { errorMessage, request, type Files, type Message, type Reply, type State, type User, type Conversation } from '../lib/api';
+import { errorMessage, rateAnswer, request, stopChat, streamChat, type Files, type Message, type Rating, type State, type User, type Conversation } from '../lib/api';
 import Composer from './composer';
 import Brand from './brand';
 import Conversations from './conversations';
 import { GeneratedFiles } from './files';
 import Icon from './icon';
-import Messages from './messages';
+import Messages, { type Draft } from './messages';
 import Auth from './auth';
 import Logo from './logo';
 import { guestToken, setGuestToken } from '../lib/guest';
 
 const emptyFiles: Files = { uploads: [], generated_files: [] };
+
+function useClearAt(time: string | null, clear: (value: null) => void) {
+  useEffect(() => {
+    if (!time) return;
+    const timer = window.setTimeout(() => clear(null), Math.max(Date.parse(time) - Date.now(), 0));
+    return () => window.clearTimeout(timer);
+  }, [time, clear]);
+}
 
 export default function Chat() {
   const [account, setAccount] = useState<User | null>(null);
@@ -23,10 +31,13 @@ export default function Chat() {
   const [active, setActive] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [files, setFiles] = useState<Files>(emptyFiles);
-  const [limitReached, setLimitReached] = useState(false);
+  const [resetsAt, setResetsAt] = useState<string | null>(null);
+  const [uploadResetsAt, setUploadResetsAt] = useState<string | null>(null);
   const [signup, setSignup] = useState(false);
   const [busy, setBusy] = useState(true);
   const [pending, setPending] = useState(false);
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [stopping, setStopping] = useState(false);
   const [uploading, setUploading] = useState<string[]>([]);
   const [collapsed, setCollapsed] = useState(false);
   const [error, setError] = useState('');
@@ -60,7 +71,7 @@ export default function Chat() {
   useEffect(() => {
     const area = conversation.current;
     if (area) area.scrollTop = area.scrollHeight;
-  }, [messages, files, pending]);
+  }, [messages, files, pending, draft]);
 
   function closeSidebar() {
     if (window.matchMedia('(max-width: 760px)').matches) sidebar.current?.close();
@@ -120,6 +131,9 @@ export default function Chat() {
     };
   }, []);
 
+  useClearAt(resetsAt, setResetsAt);
+  useClearAt(uploadResetsAt, setUploadResetsAt);
+
   function start(): boolean {
     if (working.current || uploadingNow.current) return false;
     working.current = true;
@@ -137,7 +151,8 @@ export default function Chat() {
     setConversations(state.conversations);
     setMessages(state.messages);
     setFiles(state);
-    setLimitReached(!!state.guest_limited);
+    setResetsAt(state.limit_resets_at ?? null);
+    setUploadResetsAt(state.upload_resets_at ?? null);
   }
   async function refreshFiles() {
     applyState(await request<State>('/api/state'));
@@ -181,30 +196,52 @@ export default function Chat() {
       setActive(null);
       setMessages([]);
       setFiles(emptyFiles);
-      setLimitReached(false);
+      setResetsAt(null);
+      setUploadResetsAt(null);
       setWarning('');
     } catch (error) { setError(errorMessage(error)); }
     finally { finish(); }
   }
-  async function send(message: string) {
+  async function send(message: string, replaceFrom?: number) {
     if (!ready || !start()) return;
-    const attachments = files.uploads.filter(file => !file.sent).map(({ id, filename }) => ({ id, filename }));
-    setMessages(items => [...items, { role: 'user', content: message, attachments }]);
+    const unsent = files.uploads.filter(file => !file.sent).map(({ id, filename }) => ({ id, filename }));
+    setMessages(items => {
+      const kept = replaceFrom === undefined ? [] : items[replaceFrom]?.attachments ?? [];
+      const attachments = [...kept, ...unsent.filter(file => !kept.some(item => item.id === file.id))];
+      return [...(replaceFrom === undefined ? items : items.slice(0, replaceFrom)), { role: 'user', content: message, attachments }];
+    });
     setFiles(current => ({ ...current, uploads: current.uploads.map(file => ({ ...file, sent: true })) }));
     setPending(true);
+    setDraft({ text: '', step: '' });
     try {
-      const result = await request<Reply>('/api/chat', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message }),
+      const result = await streamChat({ message, ...(replaceFrom === undefined ? {} : { replace_from: replaceFrom }) }, event => {
+        if (event.type === 'text') setDraft(current => ({ text: (current?.text ?? '') + event.text, step: current?.step ?? '' }));
+        if (event.type === 'step') setDraft({ text: '', step: event.label });
       });
-      setMessages(items => [...items, { role: 'assistant', content: result.display_answer ?? result.answer, sources: result.sources }]);
+      setMessages(items => [...items, { role: 'assistant', content: result.display_answer ?? result.answer, sources: result.sources, attachments: result.attachments, stopped: result.stopped, rating: null }]);
       setFiles(result);
-      setLimitReached(!!result.guest_limited);
+      setResetsAt(result.limit_resets_at ?? null);
     } catch (error) { setError(errorMessage(error)); }
     finally {
       setPending(false);
+      setDraft(null);
+      setStopping(false);
       try { await refreshFiles(); } catch (error) { setError(errorMessage(error)); }
       finish();
     }
+  }
+  async function stop() {
+    setStopping(true);
+    try { await stopChat(); }
+    catch (error) { setError(errorMessage(error)); setStopping(false); }
+  }
+  async function rate(index: number, rating: Rating) {
+    if (working.current) return;
+    const previous = messages[index]?.rating ?? null;
+    const apply = (value: Rating) => setMessages(items => items.map((item, position) => position === index ? { ...item, rating: value } : item));
+    apply(rating);
+    try { await rateAnswer(index, rating); }
+    catch (error) { apply(previous); setError(errorMessage(error)); }
   }
   async function upload(items: File[]) {
     if (!ready || working.current || uploadingNow.current) return;
@@ -254,7 +291,8 @@ export default function Chat() {
   </main>;
 
   const locked = busy || uploading.length > 0;
-  const limited = guest && limitReached;
+  const limited = !!resetsAt;
+  const reopens = resetsAt ? new Date(resetsAt).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '';
   function endGuest(register = false) {
     if (window.confirm('End this guest session? Messages and files will be cleared before you log in.')) void logout(register);
   }
@@ -288,7 +326,8 @@ export default function Chat() {
         <div><h2>{activeConversation?.title ?? (guest ? 'Temporary chat' : 'Conversation')}</h2><p>{guest ? 'Guest mode · session-only history' : 'A little clarity, one message at a time.'}</p></div>
       </header>
       <div ref={conversation} className="conversation-scroll">
-        <Messages messages={messages} uploads={files.uploads} pending={pending} selected={ready}>
+        <Messages messages={messages} uploads={files.uploads} pending={pending} draft={draft} selected={ready} locked={locked} canChat={ready && !limited}
+          onEdit={(index, text) => void send(text, index)} onRate={(index, rating) => void rate(index, rating)}>
           <GeneratedFiles files={files} />
         </Messages>
       </div>
@@ -297,13 +336,16 @@ export default function Chat() {
         <p className="error" role="alert" hidden={!warning}>{warning}</p>
         <p className="operation-status" role="status" hidden={!busy || pending}>{initialized.current ? 'Updating workspace…' : 'Loading workspace…'}</p>
       </div>
-      {limited && <div className="guest-limit" role="status">
-        <p><strong>You’ve used your free guest chat.</strong> Guest chat opens again 24 hours after the limit was reached. Log in or sign up to keep chatting now and save your conversations.</p>
+      {limited && !guest && <div className="guest-limit" role="status">
+        <p><strong>You’ve reached today’s limit.</strong> Chat and uploads open again at midnight ({reopens}). Your conversations stay saved.</p>
+      </div>}
+      {limited && guest && <div className="guest-limit" role="status">
+        <p><strong>You’ve used your free guest chat.</strong> Guest chat opens again at midnight ({reopens}). Log in or sign up to keep chatting now and save your conversations.</p>
         <div><button type="button" className="primary-button" disabled={locked} onClick={() => endGuest(true)}>Sign up</button>
           <button type="button" className="guest-button" disabled={locked} onClick={() => endGuest()}>Log in</button></div>
       </div>}
-      <Composer disabled={busy || !ready || limited} selected={ready} guest={guest} limited={limited} uploads={files.uploads} pending={uploading}
-        onSend={send} onUpload={upload} onRemove={remove} />
+      <Composer disabled={busy || !ready || limited} selected={ready} guest={guest} limited={limited} uploadLimited={!!uploadResetsAt} uploads={files.uploads} pending={uploading}
+        streaming={pending} stopping={stopping} onStop={() => void stop()} onSend={message => send(message)} onUpload={upload} onRemove={remove} />
     </section>
   </main>;
 }

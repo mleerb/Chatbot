@@ -1,5 +1,6 @@
 import os
 import unittest
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 from unittest.mock import patch
 
@@ -37,6 +38,27 @@ class RepositoryTests(unittest.TestCase):
 
     def save(self, question="Question", answer="Answer", sources=None, chat=None):
         repository.save_turn(self.user["id"], question, answer, sources or [], (chat or self.chat)["id"])
+
+    def test_file_embedding_migration_preserves_data_and_backfill_is_scoped(self):
+        repository.save_file(self.user["id"], self.chat["id"], "upload", "embedding-old", "old.txt", b"old",
+                             document="original")
+        with self.engine.begin() as connection:
+            connection.execute(text("ALTER TABLE chat_files DROP COLUMN embeddings"))
+        initialize_schema(self.engine)
+        initialize_schema(self.engine)
+        columns = {column["name"]: column for column in inspect(self.engine).get_columns("chat_files")}
+        self.assertTrue(columns["embeddings"]["nullable"])
+        row = repository.conversation_files(self.user["id"], self.chat["id"])[0]
+        self.assertEqual(row["data"], b"old")
+        self.assertIsNone(row["embeddings"])
+        self.assertEqual(repository.update_file_embeddings(self.user["id"], self.chat["id"], "embedding-old",
+                                                           "stale", b"bad"), 0)
+        self.assertEqual(repository.update_file_embeddings(self.user["id"], self.chat["id"], "embedding-old",
+                                                           "original", b"vectors"), 1)
+        self.assertEqual(repository.conversation_files(self.user["id"], self.chat["id"])[0]["embeddings"], b"vectors")
+        repository.delete_files(self.user["id"], self.chat["id"], "embedding-old")
+        self.assertEqual(repository.update_file_embeddings(self.user["id"], self.chat["id"], "embedding-old",
+                                                           "original", b"vectors"), 0)
 
     def test_accounts_preserve_legacy_profiles_and_allow_shared_display_names(self):
         first = repository.create_account('first@example.com', 'Tester', 'hashed-password')
@@ -80,9 +102,10 @@ class RepositoryTests(unittest.TestCase):
         self.save("Xin chào", "Chào bạn", sources)
         second = repository.create_conversation(self.user["id"], "Second")
         self.save("Another", "Response", chat=second)
+        extra = {"stopped": False, "rating": None, "trace_id": None}
         expected = [
-            {"role": "user", "content": "Xin chào", "sources": [], "attachments": []},
-            {"role": "assistant", "content": "Chào bạn", "sources": sources, "attachments": []},
+            {"role": "user", "content": "Xin chào", "sources": [], "attachments": [], **extra},
+            {"role": "assistant", "content": "Chào bạn", "sources": sources, "attachments": [], **extra},
         ]
         self.assertEqual(repository.messages(self.user["id"], conversation_id=self.chat["id"]), expected)
         self.assertEqual(repository.messages(self.user["id"], limit=1, conversation_id=self.chat["id"]), expected[-1:])
@@ -110,6 +133,45 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(repository.messages(self.user["id"])[0]["attachments"], [])
         repository.save_turn(self.user["id"], "After", "Done", [], self.chat["id"], [{"id": "u2", "filename": "a.txt"}])
         self.assertEqual(repository.attached_file_ids(self.user["id"], self.chat["id"]), {"u2"})
+
+    def test_replacing_from_a_question_drops_later_messages_only_in_that_conversation(self):
+        self.save("First", "One")
+        self.save("Second", "Two")
+        other = repository.create_conversation(self.user["id"], "Other")
+        self.save("Elsewhere", "Kept", chat=other)
+        repository.save_turn(self.user["id"], "Second again", "Partial", [], self.chat["id"], stopped=True,
+                             trace_id="trace-1", replace_from=2)
+        rows = repository.messages(self.user["id"], conversation_id=self.chat["id"])
+        self.assertEqual([row["content"] for row in rows], ["First", "One", "Second again", "Partial"])
+        self.assertTrue(rows[3]["stopped"])
+        self.assertEqual(rows[3]["trace_id"], "trace-1")
+        self.assertEqual(len(repository.messages(self.user["id"], conversation_id=other["id"])), 2)
+        with self.assertRaises(LookupError):
+            repository.save_turn(self.user["id"], "Bad", "Bad", [], self.chat["id"], replace_from=1)
+        self.assertEqual(len(repository.messages(self.user["id"], conversation_id=self.chat["id"])), 4)
+
+    def test_rating_targets_an_answer_in_the_users_conversation(self):
+        repository.save_turn(self.user["id"], "Question", "Answer", [], self.chat["id"], trace_id="trace-2")
+        self.assertEqual(repository.rate_message(self.user["id"], self.chat["id"], 1, "up"), {"trace_id": "trace-2"})
+        self.assertEqual(repository.messages(self.user["id"])[1]["rating"], "up")
+        self.assertIsNone(repository.rate_message(self.user["id"], self.chat["id"], 0, "up"))
+        self.assertIsNone(repository.rate_message(self.user["id"], self.chat["id"], 5, "up"))
+        self.assertIsNone(repository.rate_message(999999, self.chat["id"], 1, "down"))
+        repository.rate_message(self.user["id"], self.chat["id"], 1, None)
+        self.assertIsNone(repository.messages(self.user["id"])[1]["rating"])
+
+    def test_initialization_adds_answer_state_to_existing_messages(self):
+        self.save("Before upgrade")
+        with self.engine.begin() as connection:
+            connection.execute(text(
+                "CREATE TABLE legacy_messages AS SELECT id, user_id, conversation_id, role, content, sources, "
+                "attachments, created_at FROM chat_messages"))
+            connection.execute(text("DROP TABLE chat_messages"))
+            connection.execute(text("ALTER TABLE legacy_messages RENAME TO chat_messages"))
+        repository.initialize()
+        row = repository.messages(self.user["id"])[1]
+        self.assertEqual((row["stopped"], row["rating"], row["trace_id"]), (False, None, None))
+        self.assertIsNotNone(repository.rate_message(self.user["id"], self.chat["id"], 1, "down"))
 
     def test_files_are_stored_per_conversation_and_removed_with_parents(self):
         other = repository.create_conversation(self.user["id"])
@@ -158,6 +220,63 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(repository.messages(self.user["id"]), before)
         self.assertEqual(repository.conversations(self.user["id"]), [self.chat])
 
+    def test_usage_adds_within_a_day_and_restarts_on_the_next(self):
+        today = datetime(2026, 10, 22, 17, tzinfo=timezone.utc)
+        tomorrow = today + timedelta(days=1)
+        self.assertIsNone(repository.usage(self.user["id"]))
+        repository.add_usage(self.user["id"], 10, today)
+        repository.add_usage(self.user["id"], 5, today)
+        self.assertEqual(repository.usage(self.user["id"])["tokens"], 15)
+        self.assertEqual(repository.usage(self.user["id"])["window_start"].replace(tzinfo=timezone.utc), today)
+        repository.add_usage(self.user["id"], 7, tomorrow)
+        item = repository.usage(self.user["id"])
+        self.assertEqual(item["tokens"], 7)
+        self.assertEqual(item["window_start"].replace(tzinfo=timezone.utc), tomorrow)
+        other = repository.create_user("Other")
+        self.assertIsNone(repository.usage(other["id"]))
+
+    def test_upload_count_stops_at_limit_and_restarts_on_the_next_day(self):
+        today = datetime(2026, 10, 22, 17, tzinfo=timezone.utc)
+        tomorrow = today + timedelta(days=1)
+        user = self.user["id"]
+        self.assertTrue(repository.add_count(user, "uploads", today, 2))
+        repository.add_usage(user, 30, today)
+        self.assertTrue(repository.add_count(user, "uploads", today, 2))
+        self.assertFalse(repository.add_count(user, "uploads", today, 2))
+        self.assertEqual(repository.usage(user)["uploads"], 2)
+        self.assertEqual(repository.usage(user)["tokens"], 30)
+        self.assertTrue(repository.add_count(user, "uploads", tomorrow, 2))
+        item = repository.usage(user)
+        self.assertEqual((item["uploads"], item["tokens"]), (1, 0))
+        repository.add_usage(user, 5, tomorrow + timedelta(days=1))
+        self.assertEqual(repository.usage(user)["uploads"], 0)
+        self.assertFalse(repository.add_count(repository.create_user("Nobody")["id"], "uploads", today, 0))
+
+    def test_image_count_is_separate_and_can_be_released(self):
+        today = datetime(2026, 10, 22, 17, tzinfo=timezone.utc)
+        user = self.user["id"]
+        self.assertTrue(repository.add_count(user, "images", today, 1))
+        self.assertFalse(repository.add_count(user, "images", today, 1))
+        self.assertTrue(repository.add_count(user, "uploads", today, 1))
+        repository.remove_count(user, "images", today)
+        repository.remove_count(user, "images", today)
+        item = repository.usage(user)
+        self.assertEqual((item["images"], item["uploads"]), (0, 1))
+        with self.assertRaises(ValueError):
+            repository.add_count(user, "tokens", today, 1)
+
+    def test_initialization_adds_upload_count_to_existing_usage(self):
+        with self.engine.begin() as connection:
+            connection.execute(text("DROP TABLE chat_usage"))
+            connection.execute(text(
+                "CREATE TABLE chat_usage (user_id INTEGER PRIMARY KEY REFERENCES chat_users(id) ON DELETE CASCADE, "
+                "tokens BIGINT NOT NULL DEFAULT 0, window_start DATETIME NOT NULL)"))
+            connection.execute(text("INSERT INTO chat_usage (user_id, tokens, window_start) VALUES (:id, 9, '2026-10-22 17:00:00')"),
+                               {"id": self.user["id"]})
+        repository.initialize()
+        self.assertEqual(repository.usage(self.user["id"])["uploads"], 0)
+        self.assertEqual(repository.usage(self.user["id"])["tokens"], 9)
+        self.assertEqual(repository.usage(self.user["id"])["images"], 0)
 
 @unittest.skipUnless(os.getenv("TEST_DATABASE_URL"), "Set TEST_DATABASE_URL to run PostgreSQL integration tests")
 class PostgresRepositoryTests(RepositoryTests):
@@ -238,7 +357,8 @@ class PostgresRepositoryTests(RepositoryTests):
         initialize_schema(self.engine)
         initialize_schema(self.engine)
         self.assertEqual(repository.messages(self.user["id"], conversation_id=self.chat["id"]), [
-            {"role": "user", "content": "Legacy", "sources": []}])
+            {"role": "user", "content": "Legacy", "sources": [], "attachments": [], "stopped": False, "rating": None,
+             "trace_id": None}])
         self.assertEqual(len(repository.conversations(second_user)), 1)
         self.assertEqual(repository.messages(second_user)[0]["content"], "Old answer")
         with self.engine.connect() as connection:

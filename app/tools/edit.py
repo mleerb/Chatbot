@@ -1,4 +1,5 @@
 import io
+from dataclasses import replace
 from pathlib import Path
 
 from docx import Document
@@ -7,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from app.services.sessions import Download, sessions, sessions_lock
 from app.services.extract import file_context
-from app.services import storage
+from app.services import embed, storage
 from app.services.pages import text_pages
 from app.core.file_types import TEXT_EXTENSIONS
 
@@ -91,14 +92,15 @@ def create_edit_tool(token: str):
         except ValueError as exc:
             return str(exc)
         revision = Download(item.filename, edited)
-        previous = item.document, item.image_url, item.status, item.pages
-        item.document, item.image_url, item.status = file_context(item.filename, edited)
-        item.pages = text_pages(item.document)
+        document, image_url, status = file_context(item.filename, edited)
+        candidate = replace(item, document=document, image_url=image_url, status=status, pages=text_pages(document))
+        embed.prepare(candidate)
         try:
-            storage.save_revision(session, item, revision)
+            storage.save_revision(session, candidate, revision)
         except Exception:
-            item.document, item.image_url, item.status, item.pages = previous
             return "Could not save the edited copy; no edit saved."
+        item.document, item.image_url, item.status = document, image_url, status
+        item.pages, item.embeddings = candidate.pages, candidate.embeddings
         item.edits.append(revision)
         return f"Edited copy ready for download: {item.filename} (file_id={item.id}, revision_id={revision.id}). The original is unchanged."
 

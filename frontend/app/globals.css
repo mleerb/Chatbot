@@ -227,6 +227,21 @@ svg { flex: none; }
 .answer-dropdown > span { padding: 6px 10px 4px; color: var(--muted); font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; }
 .answer-dropdown button { padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--text); font-size: 13px; text-align: left; }
 .answer-dropdown button:hover, .answer-dropdown button:focus-visible { background: var(--hover); }
+.message-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin: 10px -6px -8px; }
+.message.user .message-actions { justify-content: flex-end; margin-bottom: -10px; }
+.message-actions .icon-button { width: 30px; height: 30px; }
+.message-actions .icon-button svg { width: 17px; height: 17px; }
+.message-actions .icon-button:disabled { opacity: .45; }
+.message.assistant .message-actions .icon-button { color: var(--ai-muted); }
+.message.assistant .message-actions .icon-button:hover:not(:disabled), .message.assistant .message-actions .icon-button[aria-pressed="true"] { background: rgba(255,255,255,.12); color: var(--ai-text); }
+.message.user .message-actions .icon-button[aria-pressed="true"] { color: var(--accent); }
+.stopped-note { margin: 10px 0 0; color: var(--ai-muted); font-size: 12px; font-style: italic; }
+.message-editor { display: grid; gap: 8px; min-width: min(560px, 70vw); }
+.message-editor textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--text); font: inherit; line-height: 1.6; resize: vertical; }
+.message-editor textarea:focus { border-color: var(--accent); outline: none; }
+.message-editor p { margin: 0; color: var(--muted); font-size: 12px; }
+.message-editor div { display: flex; justify-content: flex-end; gap: 8px; }
+.message-editor button { width: auto; min-height: 34px; margin: 0; padding: 7px 14px; font-size: 13px; }
 .sources { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 18px; font-size: 13px; }
 .sources > span { color: var(--muted); }
 .sources > a { padding: 4px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); font-size: 12px; }
@@ -270,6 +285,12 @@ svg { flex: none; }
 .attachment-clear { margin-left: 4px; font-size: 11px; }
 .message-files { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin: -2px 0 10px; }
 .message-files .attachment { padding-right: 4px; background: var(--surface); }
+.message-images { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+.generated-image { display: flex; flex-direction: column; gap: 6px; width: min(100%, 420px); margin: 0; }
+.generated-image img, .generated-image-placeholder { display: block; width: 100%; height: auto; border: 1px solid var(--glass-border); border-radius: 14px; background: var(--surface); }
+.generated-image-placeholder { display: grid; place-items: center; aspect-ratio: 1; color: var(--muted); font-size: 13px; }
+.generated-image figcaption { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 12px; }
+.generated-image figcaption span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .message-files .attachment.removed { padding-right: 10px; color: var(--muted); text-decoration: line-through; }
 .icon-button { display: inline-grid; place-items: center; flex: none; width: 32px; height: 32px; padding: 6px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); }
 .icon-button:hover:not(:disabled) { background: var(--accent-wash); color: var(--accent); }
@@ -280,6 +301,7 @@ svg { flex: none; }
 .sr-only { position: absolute; top: 0; left: 0; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 ::selection { background: var(--accent-wash); color: var(--text); }
 @media (max-width: 760px) {
+  .message-editor { min-width: 0; }
   .app { display: block; padding: 8px; }
   .chat-panel { height: 100%; border-radius: 22px; }
   .sidebar { position: fixed; inset: 8px auto 8px 8px; height: calc(100% - 16px); width: min(300px, 88vw); border: 1px solid var(--glass-border); background: linear-gradient(160deg, var(--surface), var(--glass-top)); }

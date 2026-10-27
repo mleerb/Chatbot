@@ -1,6 +1,7 @@
+import { useEffect, useState } from 'react';
 import type { DownloadInfo, Files, Upload } from '../lib/api';
 import Icon from './icon';
-import { guestDownload } from '../lib/guest';
+import { guestDownload, guestToken } from '../lib/guest';
 
 export function AttachedFiles({ uploads, pending, disabled, onRemove }: {
   uploads: Upload[];
@@ -58,4 +59,41 @@ export function GeneratedFiles({ files }: { files: Files }) {
       <Icon name="file" /><span>{file.filename}</span><Icon name="download" /><span className="sr-only">Download</span>
     </a>)}
   </section>;
+}
+
+function GeneratedImage({ image }: { image: DownloadInfo }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let active = true;
+    let objectUrl: string | null = null;
+    const token = guestToken();
+    fetch(`/api/files/view?file_id=${encodeURIComponent(image.id)}`, {
+      credentials: 'same-origin', cache: 'no-store', headers: token ? { 'x-guest-session': token } : {},
+    }).then(response => {
+      if (!response.ok) throw new Error('Image unavailable');
+      return response.blob();
+    }).then(blob => {
+      objectUrl = URL.createObjectURL(blob);
+      if (active) setUrl(objectUrl);
+      else URL.revokeObjectURL(objectUrl);
+    }).catch(() => { if (active) setFailed(true); });
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [image.id]);
+  return <figure className="generated-image">
+    {url ? <img src={url} alt={image.filename} /> : <div className="generated-image-placeholder" role="status">{failed ? 'Image unavailable' : 'Loading image…'}</div>}
+    <figcaption><span>{image.filename}</span>
+      <a className="icon-button" href={`/api/files/download?file_id=${encodeURIComponent(image.id)}`} download={image.filename} onClick={guestDownload}
+        aria-label={`Download ${image.filename}`}><Icon name="download" /></a>
+    </figcaption>
+  </figure>;
+}
+
+export function GeneratedImages({ images }: { images: DownloadInfo[] }) {
+  return <div className="message-images" aria-label="Images created for this answer">
+    {images.map(image => <GeneratedImage key={image.id} image={image} />)}
+  </div>;
 }

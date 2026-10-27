@@ -8,7 +8,7 @@ Aster is a local-first AI chat workspace: a Next.js frontend (`frontend/`) proxi
 docker compose up -d --build --wait
 docker compose ps
 docker compose logs --tail 50 -f app
-docker compose run --rm --no-deps --env LLAMA_CLOUD_API_KEY= --volume "$PWD/tests:/app/tests:ro" app python -m unittest discover -s tests
+docker compose run --rm --no-deps --env LLAMA_CLOUD_API_KEY= --env EMBEDDING_MODEL= --volume "$PWD/tests:/app/tests:ro" app python -m unittest discover -s tests
 npm --prefix frontend run typecheck
 npm --prefix frontend run build
 npm --prefix frontend test
@@ -23,6 +23,7 @@ Run the backend tests and a smoke check before finishing a change. Never add `--
 
 Detailed rules live in `.claude/rules/`. Claude Code loads them automatically; other agents should read the matching file before a task.
 
+- `planning.md`: show a plan and wait for approval before changing anything.
 - `code-style.md`: no comments or docstrings, naming and module ownership.
 - `prompts.md`: prompt wording lives in Jinja2 templates under `app/prompts/`.
 - `safety.md`: secrets, sessions, loopback-only and Docker validation.

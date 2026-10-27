@@ -46,6 +46,7 @@ class Message(Base):
     __tablename__ = "chat_messages"
     __table_args__ = (
         CheckConstraint("role IN ('user', 'assistant')", name="chat_messages_role_check"),
+        CheckConstraint("rating IN ('up', 'down')", name="chat_messages_rating_check"),
         Index("chat_messages_user_id_id", "user_id", "id"),
         Index("chat_messages_conversation_id_id", "conversation_id", "id"),
     )
@@ -59,6 +60,9 @@ class Message(Base):
         JSON().with_variant(JSONB, "postgresql"), server_default=text("'[]'"))
     attachments: Mapped[list[dict[str, str]]] = mapped_column(
         JSON().with_variant(JSONB, "postgresql"), server_default=text("'[]'"))
+    stopped: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    rating: Mapped[str | None] = mapped_column(Text)
+    trace_id: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -80,6 +84,17 @@ class ChatFile(Base):
     document: Mapped[str] = mapped_column(Text, server_default="")
     image_url: Mapped[str] = mapped_column(Text, server_default="")
     status: Mapped[str] = mapped_column(Text, server_default="")
+    embeddings: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     pages: Mapped[list[list[str]]] = mapped_column(
         JSON().with_variant(JSONB, "postgresql"), server_default=text("'[]'"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Usage(Base):
+    __tablename__ = "chat_usage"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("chat_users.id", ondelete="CASCADE"), primary_key=True)
+    tokens: Mapped[int] = mapped_column(BigInteger, server_default=text("0"))
+    uploads: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    images: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True))

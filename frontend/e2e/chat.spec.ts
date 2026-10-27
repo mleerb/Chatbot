@@ -79,13 +79,13 @@ test('chat errors keep attachments and allow retry', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Attach files' })).toBeEnabled();
   await page.getByLabel('Choose files').setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('notes') });
   await expect(page.locator('.attachment:not(.pending)')).toHaveCount(1);
-  await page.route('**/api/chat', route => route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ detail: 'The model is unavailable. Check model settings and retry.' }) }));
+  await page.route('**/api/chat/stream', route => route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ detail: 'The model is unavailable. Check model settings and retry.' }) }));
   await page.getByLabel('Your message').fill('Review my file');
   await page.getByRole('button', { name: 'Send message' }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Check model settings' })).toBeVisible();
   await expect(page.getByLabel('Your message')).toBeEnabled();
   await expect(page.getByLabel('Active attachments').locator('.attachment')).toHaveCount(1);
-  await page.unroute('**/api/chat');
+  await page.unroute('**/api/chat/stream');
   await page.getByLabel('Your message').fill('Try again');
   await page.getByRole('button', { name: 'Send message' }).click();
   await expect(page.getByRole('link', { name: 'Edited v1', exact: true })).toBeVisible();
@@ -237,4 +237,64 @@ test('desktop sidebar collapses, widens the workspace and remembers the choice',
   await expect(page.locator('#sidebar')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Open sidebar' })).toBeHidden();
   await page.screenshot({ path: 'test-results/sidebar-open.png', animations: 'disabled' });
+});
+
+test('daily account limit freezes chat until the window resets', async ({ page }) => {
+  await page.goto('/chat');
+  await page.getByRole('button', { name: 'New here? Create an account' }).click();
+  await page.getByLabel('Your name').fill('Limited tester');
+  await page.getByLabel('Email', { exact: true }).fill(`limited-${Date.now()}@example.com`);
+  await page.getByLabel('Password', { exact: true }).fill('test-password-123');
+  await page.getByRole('button', { name: 'Create account', exact: true }).click();
+  await page.getByLabel('Your message').fill('Use every token');
+  await page.getByRole('button', { name: 'Send message' }).click();
+  await expect(page.getByText('You’ve reached today’s limit.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign up', exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('Your message')).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Attach files' })).toBeDisabled();
+  await expect(page.locator('.message.assistant')).toHaveCount(1);
+  await page.reload();
+  await expect(page.getByLabel('Your message')).toBeDisabled();
+  await expect(page.getByLabel('Your message')).toBeEnabled({ timeout: 15000 });
+  await expect(page.getByText('You’ve reached today’s limit.')).toHaveCount(0);
+});
+
+test('daily upload limit disables attaching after five files', async ({ page }) => {
+  await page.goto('/chat');
+  await page.getByRole('button', { name: 'New here? Create an account' }).click();
+  await page.getByLabel('Your name').fill('Upload tester');
+  await page.getByLabel('Email', { exact: true }).fill(`uploads-${Date.now()}@example.com`);
+  await page.getByLabel('Password', { exact: true }).fill('test-password-123');
+  await page.getByRole('button', { name: 'Create account', exact: true }).click();
+  await page.getByLabel('Choose files').setInputFiles(Array.from({ length: 6 }, (_, index) => (
+    { name: `file-${index + 1}.txt`, mimeType: 'text/plain', buffer: Buffer.from(String(index)) })));
+  await expect(page.locator('.attachment:not(.pending)')).toHaveCount(5);
+  await expect(page.getByText('file-6.txt: Daily upload limit reached (5 files a day).')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Attach files' })).toBeDisabled();
+  await page.getByLabel('Your message').fill('Read these');
+  await page.getByRole('button', { name: 'Send message' }).click();
+  await expect(page.locator('.message.assistant')).toHaveCount(1);
+  await expect(page.getByText('You’ve used today’s file uploads.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Attach files' })).toBeDisabled();
+  await expect(page.getByLabel('Your message')).toBeEnabled();
+});
+
+test('created images appear under the answer and survive reload', async ({ page }) => {
+  await page.goto('/chat');
+  await page.getByRole('button', { name: 'New here? Create an account' }).click();
+  await page.getByLabel('Your name').fill('Image tester');
+  await page.getByLabel('Email', { exact: true }).fill(`images-${Date.now()}@example.com`);
+  await page.getByLabel('Password', { exact: true }).fill('test-password-123');
+  await page.getByRole('button', { name: 'Create account', exact: true }).click();
+  await page.getByLabel('Your message').fill('Draw a watercolor cat');
+  await page.getByRole('button', { name: 'Send message' }).click();
+  const image = page.locator('.message.assistant').getByRole('img', { name: 'watercolor-cat.png' });
+  await expect(image).toBeVisible();
+  await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(1);
+  await expect(page.locator('.message.user .message-files')).toHaveCount(0);
+  const downloading = page.waitForEvent('download');
+  await page.getByRole('link', { name: 'Download watercolor-cat.png' }).first().click();
+  expect((await downloading).suggestedFilename()).toBe('watercolor-cat.png');
+  await page.reload();
+  await expect(page.locator('.message.assistant').getByRole('img', { name: 'watercolor-cat.png' })).toBeVisible();
 });

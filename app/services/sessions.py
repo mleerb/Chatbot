@@ -1,4 +1,5 @@
 import threading
+from collections import OrderedDict
 import time
 from dataclasses import dataclass, field
 from uuid import uuid4
@@ -41,6 +42,9 @@ class Upload:
     edits: list[Download] = field(default_factory=list)
     pages: list[Page] = field(default_factory=list)
     sent: bool = False
+    embeddings: bytes | None = None
+    embeddings_dirty: bool = False
+    embedding_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def summary(self) -> dict:
         return {
@@ -76,6 +80,9 @@ class ChatSession:
     generated: dict[str, Download] = field(default_factory=dict)
     touched: float = field(default_factory=time.monotonic)
     lock: threading.Lock = field(default_factory=threading.Lock)
+    stopping: threading.Event | None = field(default=None, repr=False)
+    embedding_queries: OrderedDict = field(default_factory=OrderedDict, repr=False)
+    embedding_query_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     @property
     def latest_upload(self) -> Upload | None:
@@ -111,6 +118,7 @@ class ChatSession:
             chat.generated.clear()
         self.guest_chats.clear()
         self.parsed.clear()
+        self.embedding_queries.clear()
         self.uploads = {}
         self.generated = {}
 

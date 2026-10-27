@@ -1,3 +1,4 @@
+import logging
 import os
 from contextlib import contextmanager
 from typing import Iterator
@@ -5,6 +6,8 @@ from typing import Iterator
 from langfuse import Langfuse, propagate_attributes
 from langfuse.langchain import CallbackHandler
 from langfuse.types import MaskOtelSpansParams, MaskOtelSpansResult, OtelSpanPatch
+
+logger = logging.getLogger(__name__)
 
 REDACTED = "[REDACTED: set LANGFUSE_TRACE_CONTENT=true to capture content]"
 CONTENT_KEYS = (
@@ -47,6 +50,18 @@ def get_tracing_client() -> Langfuse:
     if _client is None:
         _client = Langfuse(mask_otel_spans=mask_otel_spans)
     return _client
+
+
+def score_answer(trace_id: str, rating: str | None) -> None:
+    if not tracing_enabled():
+        return
+    try:
+        get_tracing_client().create_score(
+            name="user-feedback", value={"up": 1, "down": -1}.get(rating, 0), data_type="NUMERIC",
+            trace_id=trace_id, score_id=f"{trace_id}-feedback",
+        )
+    except Exception:
+        logger.exception("Could not send answer feedback to Langfuse")
 
 
 def flush_traces() -> None:
