@@ -1,6 +1,9 @@
 import { guestToken } from './guest';
 
-export type Source = { title: string; url: string };
+export type WebSource = { kind?: 'web'; marker?: string; title: string; url: string };
+export type DocumentSource = { kind: 'document'; id: string; marker: string; title: string; file_id: string; revision_id: string; revision: string; version: string; location: string };
+export type Source = WebSource | DocumentSource;
+export type SourceText = DocumentSource & { text: string };
 export type DownloadInfo = { id: string; filename: string };
 export type ExportFormat = 'md' | 'docx' | 'pdf';
 export type Rating = 'up' | 'down' | null;
@@ -12,6 +15,14 @@ export type Files = { uploads: Upload[]; generated_files: DownloadInfo[] };
 export type State = Files & { user_id: number | null; conversation_id: number | null; conversations: Conversation[]; messages: Message[]; guest_limited?: boolean; limit_resets_at?: string | null; upload_resets_at?: string | null };
 export type Reply = Files & { answer: string; display_answer: string; stopped?: boolean; sources: Source[]; attachments?: DownloadInfo[]; guest_limited?: boolean; limit_resets_at?: string | null };
 export type StreamEvent = { type: 'text'; text: string } | { type: 'step'; label: string } | ({ type: 'done' } & Reply) | { type: 'error'; status: number; detail: string };
+
+export async function previewBlob(id: string): Promise<Blob> {
+  const response = await fetch(`/api/files/preview/content?file_id=${encodeURIComponent(id)}`, {
+    credentials: 'same-origin', cache: 'no-store', headers: guestHeaders(),
+  });
+  if (!response.ok) throw new Error('File preview unavailable');
+  return response.blob();
+}
 
 export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Request failed';

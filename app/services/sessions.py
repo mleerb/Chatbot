@@ -81,6 +81,7 @@ class ChatSession:
     touched: float = field(default_factory=time.monotonic)
     lock: threading.Lock = field(default_factory=threading.Lock)
     stopping: threading.Event | None = field(default=None, repr=False)
+    evidence: object | None = field(default=None, repr=False)
     embedding_queries: OrderedDict = field(default_factory=OrderedDict, repr=False)
     embedding_query_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
@@ -111,6 +112,7 @@ class ChatSession:
         self.guest_meter = None
         self.conversation_id = None
         self.history.clear()
+        self.evidence = None
         self.uploads.clear()
         self.generated.clear()
         for chat in self.guest_chats.values():

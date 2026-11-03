@@ -1,6 +1,7 @@
 *
 !package.json
 !package-lock.json
+!pdf-assets.mjs
 !tsconfig.json
 !next.config.ts
 !app/
@@ -11,3 +12,4 @@
 !lib/**
 !public/
 !public/**
+public/pdfjs/

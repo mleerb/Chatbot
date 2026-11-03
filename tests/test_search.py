@@ -63,7 +63,7 @@ class SearchTests(unittest.TestCase):
         with patch.dict(os.environ, {"TAVILY_API_KEY": "test-key"}), patch('app.services.chat.make_agent', side_effect=lambda token, question, sources: create_search_tool(question, sources)), patch('app.services.chat.answer_question', side_effect=answer), patch('app.tools.search.search_web', return_value=[{'title': 'Source', 'url': 'https://example.com', 'content': 'Result'}]):
             response = self.client.post('/api/chat', json={'message': 'Find external evidence'})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()['sources'], [{'title': 'Source', 'url': 'https://example.com'}])
+        self.assertEqual(response.json()['sources'], [{'title': 'Source', 'url': 'https://example.com', 'kind': 'web', 'marker': 'W1'}])
         self.assertIn('https://example.com', response.json()['answer'])
         self.assertEqual(response.json()['display_answer'], 'See evidence.')
         state = self.client.get('/api/state').json()

@@ -52,6 +52,53 @@ class GeneratedFileTests(unittest.TestCase):
             other.post('/api/auth/login', json={'email': 'tester@example.com', 'password': 'test-password-123'})
             self.assertEqual(other.get('/api/files/download').content, b'# Hello\n')
 
+    def test_standalone_text_files_through_chat_download_and_reload(self):
+        examples = {
+            'index.html': '<!doctype html><h1>Hello / Xin chào</h1><script>alert(1)</script>',
+            'README.md': '# Hello / Xin chào\n\nStandalone Markdown.',
+            'data.json': '{"english":"Hello","vietnamese":"Xin chào"}',
+            'data.csv': 'language,greeting\nen,Hello\nvi,Xin chào\n',
+            'example.py': 'print("Hello / Xin chào")\n',
+        }
+        for filename, content in examples.items():
+            with self.subTest(filename=filename):
+                def reply(agent, *args, **kwargs):
+                    result = agent.invoke({'filename': filename, 'content': content})
+                    self.assertIn('Created downloadable file', result)
+                    return 'File ready / Tệp đã sẵn sàng.'
+
+                with patch('app.services.chat.make_agent', side_effect=lambda token, question, sources: create_file_tool(token)), patch(
+                    'app.services.chat.answer_question', side_effect=reply
+                ):
+                    response = self.client.post('/api/chat', json={
+                        'message': f'Create a standalone downloadable {filename}. Tạo tệp riêng, không dùng ZIP.'})
+                self.assertEqual(response.status_code, 200)
+                generated = response.json()['generated_files'][-1]
+                self.assertEqual(generated['filename'], filename)
+                download = self.client.get('/api/files/download', params={'file_id': generated['id']})
+                self.assertEqual(download.content, content.encode('utf-8'))
+                self.assertFalse(download.content.startswith(b'PK\\x03\\x04'))
+                self.assertIn('attachment;', download.headers['content-disposition'])
+                self.assertIn(filename, download.headers['content-disposition'])
+                self.assertEqual(download.headers['x-content-type-options'], 'nosniff')
+                self.assertTrue(download.headers['content-type'].startswith('application/octet-stream'))
+        stored = self.client.get('/api/state').json()['generated_files']
+        self.assertEqual([item['filename'] for item in stored], list(examples))
+        self.client.post('/api/auth/logout')
+        self.client.post('/api/auth/login', json={'email': 'tester@example.com', 'password': 'test-password-123'})
+        for item in self.client.get('/api/state').json()['generated_files']:
+            self.assertEqual(self.client.get('/api/files/download', params={'file_id': item['id']}).content,
+                             examples[item['filename']].encode('utf-8'))
+
+    def test_all_supported_text_extensions_are_individual_utf8_files(self):
+        from app.core.file_types import TEXT_EXTENSIONS
+
+        for extension in sorted(TEXT_EXTENSIONS):
+            with self.subTest(extension=extension):
+                filename, data = validate_file('example' + extension, 'Hello / Xin chào')
+                self.assertEqual(filename, 'example' + extension)
+                self.assertEqual(data, 'Hello / Xin chào'.encode('utf-8'))
+
     def test_invalid_extensions_paths_and_large_outputs(self):
         for filename in ('../bad.md', 'dir/file.txt', r'dir\\file.txt', 'program.exe', 'image.png', ''):
             with self.subTest(filename=filename), self.assertRaises(ValueError):

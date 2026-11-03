@@ -2,6 +2,8 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from app.services import pages
+from app.services.citations import current
+from app.prompts import render_prompt
 from app.services.sessions import Upload, sessions, sessions_lock
 
 FILE_ID = "ID of the uploaded file; optional only when exactly one file is uploaded"
@@ -51,7 +53,13 @@ def create_page_tools(token: str) -> list:
     )
     def read_page(page: int, file_id: str = "") -> str:
         item = find_upload(token, file_id)
-        return item if isinstance(item, str) else pages.read(item, page)
+        if isinstance(item, str):
+            return item
+        result = pages.read(item, page)
+        evidence = current(token)
+        if evidence is not None and 1 <= page <= len(item.pages):
+            result += "\n\n" + render_prompt("citation.j2", source=evidence.read(item, page, item.pages[page - 1]))
+        return result
 
     @tool(
         args_schema=SearchRequest,

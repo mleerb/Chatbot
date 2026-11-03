@@ -5,7 +5,7 @@ import threading
 from app.core.errors import ServiceError
 from app.core.trace import score_answer
 from app.db import repository
-from app.services import guest, images, quota
+from app.services import citations, guest, images, quota
 from app.services.agent import answer_question, make_agent, stream_answer
 from app.services.context import MAX_HISTORY_MESSAGES
 from app.services.pages import estimate_tokens
@@ -86,10 +86,13 @@ def turn(token: str, session: ChatSession, message: str, replace_from: int | Non
             return finish_turn(token, session, question, replace_from, produce)
         finally:
             session.stopping = None
+            session.evidence = None
 
 
 def finish_turn(token: str, session: ChatSession, question: str, replace_from: int | None, produce):
     sources = []
+    evidence = citations.Evidence(sources)
+    session.evidence = evidence
     usage = []
     traces = []
     existing = set(session.generated)
@@ -106,12 +109,12 @@ def finish_turn(token: str, session: ChatSession, question: str, replace_from: i
     except Exception as exc:
         logger.exception("Chat request failed")
         raise ServiceError(502, "Could not get an answer. Check the server log and model settings.") from exc
-    links = list(dict.fromkeys((item["title"], item["url"]) for item in sources))
-    citations = [{"title": title, "url": url} for title, url in links]
+    answer, references = citations.finish(answer, evidence)
     linked_answer = answer
+    links = [source for source in references if source["kind"] == "web"]
     if links:
         linked_answer += "\n\nWeb sources:\n" + "\n".join(
-            f"{title}: {url}" for title, url in links
+            f"[{source['marker']}] {source['title']}: {source['url']}" for source in links
         )
     unsent = [item for item in session.uploads.values() if not item.sent]
     kept_ids = {item.get("id") for item in kept}
@@ -121,7 +124,7 @@ def finish_turn(token: str, session: ChatSession, question: str, replace_from: i
     trace_id = traces[0] if traces else None
     turn_messages = [
         {"role": "user", "content": question, "attachments": attachments},
-        {"role": "assistant", "content": answer, "sources": citations, "attachments": created,
+        {"role": "assistant", "content": answer, "sources": references, "attachments": created,
          "stopped": stopped, "rating": None},
     ]
     tokens = sum(usage) or estimate_tokens(question + answer)
@@ -136,7 +139,7 @@ def finish_turn(token: str, session: ChatSession, question: str, replace_from: i
             guest.rename(session, session.conversation_id, suggest_title(question, answer))
     else:
         try:
-            repository.save_turn(session.user_id, question, answer, citations, session.conversation_id, attachments,
+            repository.save_turn(session.user_id, question, answer, references, session.conversation_id, attachments,
                                  created, stopped=stopped, trace_id=trace_id, replace_from=replace_from)
         except Exception as exc:
             logger.exception("Could not save chat turn")
@@ -155,7 +158,7 @@ def finish_turn(token: str, session: ChatSession, question: str, replace_from: i
         "display_answer": answer,
         "stopped": stopped,
         **session.file_state(),
-        "sources": citations,
+        "sources": references,
         "attachments": created,
         "guest_limited": session.guest and guest.limited(session),
         "limit_resets_at": guest.resets_at(session) if session.guest else quota.resets_at(session.user_id),
@@ -175,11 +178,17 @@ def stream_reply(token: str, session: ChatSession, message: str, replace_from: i
 
     def produce(agent, *args, **kwargs):
         result = {"answer": "", "stopped": False}
+        filtered = citations.CitationStream(session.evidence)
         for event in stream_answer(agent, *args, stop=stop, **kwargs):
             if event["type"] == "end":
                 result = event
-            else:
+            elif event["type"] == "step":
+                filtered = citations.CitationStream(session.evidence)
                 events.put(event)
+            elif event["type"] == "text":
+                delta = filtered.feed(event["text"])
+                if delta:
+                    events.put({"type": "text", "text": delta})
         return result["answer"], result["stopped"]
 
     def run():

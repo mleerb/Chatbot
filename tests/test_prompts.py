@@ -25,6 +25,25 @@ class PromptTests(unittest.TestCase):
         self.assertIn("Markdown", render_prompt("system.j2"))
         self.assertIn("Never send file", render_prompt("system.j2"))
 
+    def test_standalone_formats_are_explicit_and_match_backend_allowlist(self):
+        from app.core.file_types import TEXT_EXTENSIONS
+        from app.tools.create import CreatedFile, create_file_tool
+
+        system = render_prompt('system.j2')
+        tool = create_file_tool('test-token')
+        metadata = CreatedFile.model_json_schema()['properties']['filename']['description']
+        for extension in TEXT_EXTENSIONS:
+            with self.subTest(extension=extension):
+                self.assertIn(extension, system)
+                self.assertIn(extension, tool.description)
+                self.assertIn(extension, metadata)
+        self.assertIn('Use ZIP only when the user explicitly requests an archive', system)
+        self.assertIn('call create_text_file once per file', system)
+        self.assertIn('downloadable JSON file uses create_text_file instead', system)
+        self.assertIn('not restricted to ZIP entries', system)
+        self.assertIn('do not need a ZIP', tool.description)
+        self.assertIn('Use .zip only when the user explicitly requests an archive', tool.description)
+
     def test_document_template_renders_all_text_literally(self):
         document = "Literal {{ not_a_variable }} " + "x" * 20_001 + " END"
         upload = Upload("note.txt", b"", document, "", "Ready")

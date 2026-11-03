@@ -30,8 +30,8 @@ class AppTests(unittest.TestCase):
             "/api/auth/me", "/api/auth/login", "/api/auth/register", "/api/auth/logout", "/api/auth/guest", "/api/auth/guest/close",
             "/api/state", "/api/chat", "/api/chat/stream", "/api/chat/stop", "/api/chat/rating", "/api/document", "/api/document/download",
             "/api/document/edited", "/api/users", "/api/users/{user_id}/select",
-            "/api/users/{user_id}/messages", "/api/files/download", "/api/files/view", "/api/conversations",
-            "/api/conversations/{conversation_id}", "/api/conversations/{conversation_id}/select", "/api/export",
+            "/api/users/{user_id}/messages", "/api/files/download", "/api/files/view", "/api/files/preview", "/api/files/preview/content", "/api/conversations",
+            "/api/conversations/{conversation_id}", "/api/conversations/{conversation_id}/select", "/api/export", "/api/sources/{source_id}",
         })
         chat = schema["paths"]["/api/chat"]["post"]
         self.assertEqual(chat["responses"]["200"]["content"]["application/json"]["schema"],

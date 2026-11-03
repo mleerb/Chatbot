@@ -326,7 +326,7 @@ export default function Chat() {
         <div><h2>{activeConversation?.title ?? (guest ? 'Temporary chat' : 'Conversation')}</h2><p>{guest ? 'Guest mode · session-only history' : 'A little clarity, one message at a time.'}</p></div>
       </header>
       <div ref={conversation} className="conversation-scroll">
-        <Messages messages={messages} uploads={files.uploads} pending={pending} draft={draft} selected={ready} locked={locked} canChat={ready && !limited}
+        <Messages key={`${selected ?? 'guest'}:${active ?? 'new'}`} messages={messages} uploads={files.uploads} pending={pending} draft={draft} selected={ready} locked={locked} canChat={ready && !limited}
           onEdit={(index, text) => void send(text, index)} onRate={(index, rating) => void rate(index, rating)}>
           <GeneratedFiles files={files} />
         </Messages>

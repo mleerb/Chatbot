@@ -7,6 +7,7 @@ from deepagents import create_deep_agent
 from langchain_core.messages import AIMessage, AIMessageChunk
 
 from app.services.context import conversation_messages, response_text
+from app.services.citations import current
 from app.services.model import chat_model
 from app.services.steps import step_label
 from app.prompts import render_prompt
@@ -55,7 +56,7 @@ def observe(session_id: str, question: str, uploads: list[Upload] | None, trace:
 def answer_question(agent, question: str, history: list[dict], session_id: str,
                     uploads: list[Upload] | None = None, trace: bool = True,
                     usage: list[int] | None = None, traces: list[str] | None = None) -> str:
-    messages = conversation_messages(question, history, uploads)
+    messages = conversation_messages(question, history, uploads, evidence=current(session_id))
     with observe(session_id, question, uploads, trace) as (handler, span):
         config = {"callbacks": [handler]} if handler else None
         result = agent.invoke({"messages": messages}, config=config)
@@ -75,7 +76,7 @@ def stream_answer(agent, question: str, history: list[dict], session_id: str,
                   uploads: list[Upload] | None = None, trace: bool = True,
                   usage: list[int] | None = None, traces: list[str] | None = None,
                   stop: threading.Event | None = None) -> Iterator[dict]:
-    messages = conversation_messages(question, history, uploads)
+    messages = conversation_messages(question, history, uploads, evidence=current(session_id))
     filenames = {item.id: item.filename for item in uploads or []}
     with observe(session_id, question, uploads, trace) as (handler, span):
         config = {"callbacks": [handler]} if handler else None

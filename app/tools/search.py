@@ -4,6 +4,8 @@ from urllib.parse import urlsplit
 import httpx
 from langchain_core.tools import tool
 
+from app.services.citations import web_sources
+
 SEARCH_URL = "https://api.tavily.com/search"
 
 
@@ -41,9 +43,10 @@ def create_search_tool(question: str, sources: list[dict[str, str]]):
         sources.extend(results)
         if not results:
             return "No web results found. Do not cite web evidence."
+        markers = {source["url"]: source["marker"] for source in web_sources(sources)}
         return "\n\n".join(
-            f"[{index}] {source['title']}\n{source['url']}\n{source['content']}"
-            for index, source in enumerate(results, start=1)
+            f"[{markers[source['url']]}] {source['title']}\n{source['url']}\n{source['content']}"
+            for source in results
         )
 
     return search_current_question

@@ -17,7 +17,7 @@ def response_text(content: str | list) -> str:
 
 
 def conversation_messages(question: str, history: list[dict],
-                          uploads: list[Upload] | None = None) -> list[dict]:
+                          uploads: list[Upload] | None = None, evidence=None) -> list[dict]:
     messages = []
     for item in uploads or []:
         messages.append({
@@ -31,10 +31,16 @@ def conversation_messages(question: str, history: list[dict],
                                          page_count=len(item.pages), tokens=estimate_tokens(item.document)),
             })
         elif item.document:
-            messages.append({
-                "role": "user",
-                "content": render_prompt("document.j2", document_text=item.document),
-            })
+            from app.services.pages import text_pages
+
+            sections = item.pages or text_pages(item.document)
+            if evidence is None:
+                content = render_prompt("document.j2", document_text=item.document)
+            else:
+                content = "\n\n".join(render_prompt(
+                    "section.j2", source=evidence.read(item, number, page),
+                ) for number, page in enumerate(sections, 1))
+            messages.append({"role": "user", "content": content})
         if not item.document and not item.image_url:
             messages.append({
                 "role": "user",
@@ -48,7 +54,10 @@ def conversation_messages(question: str, history: list[dict],
                     {"type": "image_url", "image_url": {"url": item.image_url}},
                 ],
             })
-    messages.extend({"role": item["role"], "content": item["content"]}
+    from app.services.citations import MARKER
+
+    messages.extend({"role": item["role"], "content": MARKER.sub("", item["content"])
+                     if item["role"] == "assistant" else item["content"]}
                     for item in history[-MAX_HISTORY_MESSAGES:])
     messages.append({"role": "user", "content": question})
     return messages

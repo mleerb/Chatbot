@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { DownloadInfo, Files, Upload } from '../lib/api';
 import Icon from './icon';
+import FilePreview from './preview';
 import { guestDownload, guestToken } from '../lib/guest';
 
 export function AttachedFiles({ uploads, pending, disabled, onRemove }: {
@@ -51,13 +52,17 @@ export function MessageFiles({ attachments, uploads }: { attachments: DownloadIn
 }
 
 export function GeneratedFiles({ files }: { files: Files }) {
+  const [preview, setPreview] = useState<DownloadInfo | null>(null);
   if (!files.generated_files.length) return null;
   return <section className="conversation-files generated" aria-label="Generated files">
     <h2>Created files</h2>
-    {files.generated_files.map(file => <a key={file.id} className="generated-file" download={file.filename} onClick={guestDownload}
-      href={`/api/files/download?file_id=${encodeURIComponent(file.id)}`}>
-      <Icon name="file" /><span>{file.filename}</span><Icon name="download" /><span className="sr-only">Download</span>
-    </a>)}
+    {files.generated_files.map(file => <div key={file.id} className="generated-file">
+      <Icon name="file" /><span>{file.filename}</span>
+      <button type="button" className="preview-button" aria-label={`Preview ${file.filename}`} onClick={() => setPreview(file)}>Preview</button>
+      <a className="icon-button" download={file.filename} onClick={guestDownload} aria-label={`Download ${file.filename}`}
+        href={`/api/files/download?file_id=${encodeURIComponent(file.id)}`}><Icon name="download" /></a>
+    </div>)}
+    {preview && <FilePreview key={preview.id} file={preview} onClose={() => setPreview(null)} />}
   </section>;
 }
 

@@ -10,12 +10,14 @@ A local-first AI chat workspace built with **Next.js, FastAPI, Deep Agents and P
 - **Guest chat:** no registration required. A guest has one temporary chat at a time; starting a new chat deletes the current one and its files. Each browser has a hidden guest token budget (`GUEST_TOKEN_LIMIT`, default 50,000) shared by all its guest tabs; once it is used up, guest chat is blocked in that browser until midnight, even after closing the tab, unless the guest logs in or signs up.
 - **Daily account limit:** each account can use `USER_TOKEN_LIMIT` tokens (default 500,000) per day. Once it is used up, chat and uploads pause until midnight and the workspace shows when they reopen; saved conversations stay readable. Each account and each guest browser can also upload `UPLOAD_LIMIT` files a day (default 5). All guest and account limits reset at 00:00 in `LIMIT_TIMEZONE` (default `Asia/Ho_Chi_Minh`).
 - **File context:** read DOCX, UTF-8 text and images with a vision-capable model, or any file type through optional LlamaParse. Upload multiple files and manage them independently.
-- **Edits and downloads:** keep uploaded originals, download text/DOCX revisions, and generate text, DOCX, PDF, XLSX, PPTX or ZIP files.
+- **Edits and downloads:** keep uploaded originals, download text/DOCX revisions, and generate standalone text/code/data files (`.txt`, `.md`, `.csv`, `.json`, `.xml`, `.yaml`, `.yml`, `.html`, `.css`, `.js`, `.py`, `.log`, `.ini`), DOCX, PDF, XLSX or PPTX. Each requested file has its own download; ZIP is used only when an archive is explicitly requested.
+- **Preview before download:** generated files have separate Preview and Download actions. HTML offers an isolated static visual preview and escaped source; PDFs render locally with page navigation/zoom; Office files show extracted text or sheet values, ZIP shows entries, and PNG shows the image. Previews are bounded and never execute file scripts or formulas.
 - **Image generation (optional, off by default):** set `IMAGE_MODEL` to an image model your OpenAI key or gateway offers, and the assistant can create PNG images that appear under its answer, limited to `IMAGE_LIMIT` (default 10) per account and `GUEST_IMAGE_LIMIT` (default 2) per guest browser a day.
 - **Live answers:** answers appear word by word while the model writes, with a short note when the assistant searches the web, reads or edits a file, or creates a file or image. **Stop** ends an answer early and keeps what was written, marked *Stopped*.
 - **Answer controls:** copy any message or answer, edit one of your messages to resend it (this replaces it and everything after it), regenerate the last answer, and rate answers with Good answer / Bad answer. With Langfuse tracing on, ratings on account answers are also sent as a feedback score.
 - **Answer formats:** ask for a table, bullet points, steps, code, JSON, or a short or detailed answer in your message, or let the assistant pick what fits. Answers render as Markdown (tables, lists, code with copy) and can be exported as Markdown, Word or PDF from each answer's ⋯ menu.
-- **Optional web search:** Tavily evidence links alongside answers.
+- **Document citations and source viewer:** clickable `[D1]` references open the exact extracted section/page text supplied to the assistant, including small files and edited revisions. Sources display only escaped plain text in a desktop side panel or mobile sheet. References are validated against supplied context, not automatically fact-checked.
+- **Optional web search:** Tavily evidence links use separate `[W1]` markers and a Web sources group, distinct from Document sources.
 - **Optional observability:** Langfuse tracing for account chats, with content redacted by default. Guest turns bypass the application's tracing integration.
 - **Responsive interface:** Aster landing page and chat workspace, light/dark themes, and locally served fonts with no external CDN dependency.
 
@@ -57,7 +59,7 @@ docker volume create chatbot_postgres_data
 docker compose up -d --build --wait
 docker compose ps
 ```
-clU
+
 Open **http://127.0.0.1:18080/** and select **Start a conversation**. Create an account to save history, or choose **Continue as guest**.
 
 The stack uses **PostgreSQL 17**. An existing volume must have compatible data and matching credentials; changing an environment variable does not change an existing database password. Do not delete the volume or change the PostgreSQL major version to resolve startup errors.

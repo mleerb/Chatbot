@@ -2,6 +2,7 @@
 .venv-win/
 node_modules/
 .next/
+frontend/public/pdfjs/
 *.tsbuildinfo
 next-env.d.ts
 playwright-report/
@@ -19,6 +20,7 @@ documents/*
 reports/
 *.docx
 *.pdf
+!frontend/e2e/fixtures/preview.pdf
 *.xlsx
 *.pptx
 *.zip

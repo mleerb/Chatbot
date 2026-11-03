@@ -34,6 +34,6 @@ Detailed rules live in `.claude/rules/`. Claude Code loads them automatically; o
 ## Docs
 
 - `docs/architecture.md`: module map and prompts.
-- `docs/files.md`: file formats and behavior.
+- `docs/files.md`: file formats, generated previews, revision-bound citations and plain-text source viewing.
 - `docs/setup.md`: configuration, backups and validation.
 - Shared skills: `.agents/skills/`.

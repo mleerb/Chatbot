@@ -1,5 +1,7 @@
-import { useState, type ReactNode } from 'react';
-import { safeUrl, type Message, type Rating, type Upload } from '../lib/api';
+import { useCallback, useState, type ReactNode } from 'react';
+import { type DocumentSource, type Source, type Message, type Rating, type Upload } from '../lib/api';
+import { draftText } from '../lib/citations';
+import SourceViewer, { SourceList } from './sources';
 import AnswerMenu from './answer-menu';
 import Brand from './brand';
 import { GeneratedImages, MessageFiles } from './files';
@@ -46,6 +48,8 @@ export default function Messages({ messages, uploads, pending, draft, selected, 
   children: ReactNode;
 }) {
   const [editing, setEditing] = useState<number | null>(null);
+  const [source, setSource] = useState<DocumentSource | null>(null);
+  const openSource = useCallback((item: Source) => { if (item.kind === 'document') setSource(item); }, []);
   const last = messages.length - 1;
   return <div className="conversation-content">
     {!messages.length && !pending && <section className="empty-state">
@@ -59,19 +63,14 @@ export default function Messages({ messages, uploads, pending, draft, selected, 
         <span className="message-author">{message.role === 'assistant' && <span className="message-avatar"><Logo /></span>}{message.role === 'user' ? 'You' : 'Aster'}
           {message.role === 'assistant' && <AnswerMenu content={message.content} index={index} />}</span>
         {message.role === 'user' && !!message.attachments?.length && <MessageFiles attachments={message.attachments} uploads={uploads} />}
-        {message.role === 'assistant' ? <Markdown content={message.content} />
+        {message.role === 'assistant' ? <Markdown content={message.content} sources={message.sources}
+          onSource={openSource} />
           : editing === index ? <Editor initial={message.content} onCancel={() => setEditing(null)}
             onSave={text => { setEditing(null); onEdit(index, text); }} />
           : <div className="message-body">{message.content}</div>}
         {message.role === 'assistant' && message.stopped && <p className="stopped-note">{message.content ? 'Stopped' : 'Stopped before answering'}</p>}
         {message.role === 'assistant' && !!message.attachments?.length && <GeneratedImages images={message.attachments} />}
-        {!!message.sources?.length && <div className="sources">
-          <span>Sources</span>
-          {message.sources.map((source, index) => {
-            const url = safeUrl(source.url);
-            return url ? <a key={index} href={url} target="_blank" rel="noopener noreferrer">{source.title || url}</a> : null;
-          })}
-        </div>}
+        {!!message.sources?.length && <SourceList sources={message.sources} onOpen={setSource} />}
         {editing !== index && <div className="message-actions" role="group" aria-label={message.role === 'user' ? 'Message actions' : 'Answer actions'}>
           {!!message.content && <CopyButton text={message.content} label={message.role === 'user' ? 'Copy message' : 'Copy answer'} />}
           {message.role === 'user' && <button type="button" className="icon-button" aria-label="Edit message" title="Edit message"
@@ -87,9 +86,10 @@ export default function Messages({ messages, uploads, pending, draft, selected, 
         </div>}
       </article>)}
       {pending && <article className="message assistant pending"><span className="message-author"><span className="message-avatar"><Logo thinking /></span>Aster</span>
-        {draft?.text ? <Markdown content={draft.text} /> : <p className="thinking" role="status">{draft?.step ? `${draft.step}…` : 'Thinking…'}</p>}
+        {draft?.text ? <Markdown content={draftText(draft.text)} /> : <p className="thinking" role="status">{draft?.step ? `${draft.step}…` : 'Thinking…'}</p>}
       </article>}
     </div>
     {children}
+    {source && <SourceViewer source={source} onClose={() => setSource(null)} />}
   </div>;
 }

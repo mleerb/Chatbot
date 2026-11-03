@@ -3,6 +3,7 @@ from pathlib import Path
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
+from app.prompts import render_prompt
 from app.services import storage
 from app.services.sessions import Download, sessions, sessions_lock
 from app.core.file_types import TEXT_EXTENSIONS
@@ -10,7 +11,8 @@ from app.formats import GENERATORS
 
 
 class CreatedFile(BaseModel):
-    filename: str = Field(description="A simple filename with a supported text extension, .docx, .pdf, .xlsx, .pptx or .zip")
+    filename: str = Field(description="A simple filename preserving the requested extension: "
+                          + ", ".join(sorted(TEXT_EXTENSIONS)) + ", .docx, .pdf, .xlsx, .pptx or .zip")
     content: str = Field(description="Text for text files; plain text or JSON blocks for .docx/.pdf; JSON sheets/slides/entries for .xlsx/.pptx/.zip")
 
 
@@ -29,7 +31,7 @@ def validate_file(filename: str, content: str) -> tuple[str, bytes]:
 def create_file_tool(token: str):
     @tool(
         args_schema=CreatedFile,
-        description="Create a real downloadable text, .docx, .pdf, .xlsx, .pptx or .zip file. For .docx/.pdf use plain text or JSON {'blocks':[{'type':'heading'|'paragraph','text':'...'}, {'type':'table','rows':[['A','B']]}]}. For .xlsx use {'sheets':[{'name':'Sheet1','rows':[['A',1]]}]}; .pptx use {'slides':[{'title':'Title','body':'Text'}]}; .zip use {'entries':[{'name':'notes.txt','content':'Text'}]}. For images use generate_image instead; do not generate executables.",
+        description=render_prompt("create.j2"),
     )
     def create_text_file(filename: str, content: str) -> str:
         try:

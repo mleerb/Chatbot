@@ -25,9 +25,30 @@ class StopResponse(BaseModel):
     stopped: bool
 
 
-class Source(BaseModel):
+class WebSource(BaseModel):
     title: str
     url: str
+    kind: Literal["web"] = "web"
+    marker: str = ""
+
+
+class DocumentSource(BaseModel):
+    kind: Literal["document"]
+    id: str
+    marker: str
+    title: str
+    file_id: str
+    revision_id: str
+    revision: str
+    version: str
+    location: str
+
+
+class SourceText(DocumentSource):
+    text: str
+
+
+Source = WebSource | DocumentSource
 
 
 class Message(BaseModel):

@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 
 const sessions = new Map();
 const users = [{ id: 1, name: 'Tester', email: 'tester@example.com' }, { id: 2, name: 'Other', email: 'other@example.com' }];
@@ -10,6 +11,8 @@ const limits = new Map();
 const uploadCounts = new Map();
 const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
 const imageNames = new Map();
+const sourceSnapshots = new Map();
+const previewPdf = readFileSync(new URL('./fixtures/preview.pdf', import.meta.url));
 let nextConversation = 1;
 let answerCount = 0;
 function owner(state) {
@@ -66,6 +69,7 @@ function replyFor(question) {
     table: '| Plan | Price |\n| --- | --- |\n| Basic | $5 |\n| Pro | $9 |',
     code: 'Run this:\n\n```python\nprint("hi")\n```\n\n<b>raw html</b> [bad](javascript:alert(1)) ![tracker](https://example.com/x.png) [good](https://example.com/docs)',
   };
+  if (question.startsWith('Cite')) return 'English evidence [D1]. Bằng chứng tiếng Việt [D1]. Web evidence [W1].';
   if (question.startsWith('Draw')) return 'Here is your watercolor cat.';
   if (question.startsWith('Slow')) return 'This answer arrives one slow word at a time so it can be stopped early.';
   if (question.startsWith('Again')) return `Answer number ${++answerCount}.`;
@@ -83,14 +87,26 @@ function finishTurn(state, question, replaceFrom, reply, stopped) {
   for (const image of images) { imageNames.set(image.id, image.filename); state.generated_files.push(image); }
   keepFiles(state);
   if (replaceFrom !== null) state.messages.splice(replaceFrom);
-  state.messages.push({ role: 'user', content: question, attachments }, { role: 'assistant', content: reply, attachments: images, stopped, rating: null, sources: [{ title: 'Evidence', url: 'https://example.com' }] });
+  if (question.startsWith('Preview fixtures')) {
+    state.generated_files.push(...['index.html', 'report.pdf', 'notes.md', 'budget.xlsx', 'slides.pptx', 'bundle.zip'].map(filename => ({ id: randomUUID(), filename })));
+    keepFiles(state);
+  }
+  const sources = [{ kind: 'web', marker: 'W1', title: 'Evidence', url: 'https://example.com' }];
+  if (question.startsWith('Cite') && state.uploads.length && reply.includes('[D1]')) {
+    const file = state.uploads[0];
+    const source = { kind: 'document', id: randomUUID(), marker: 'D1', title: file.filename, file_id: file.id,
+      revision_id: file.id, revision: 'test-revision', version: 'Original', location: 'Section 1' };
+    sources.unshift(source);
+    sourceSnapshots.set(source.id, { ...source, text: file.text, owner: owner(state), conversation_id: state.conversation_id });
+  }
+  state.messages.push({ role: 'user', content: question, attachments }, { role: 'assistant', content: reply, attachments: images, stopped, rating: null, sources });
   if (state.guest) {
     state.guest_tokens += question.startsWith('Use every token') ? 50000 : Math.ceil((question.length + 16) / 4);
     state.guest_limited = state.guest_tokens >= 50000;
   } else if (question.startsWith('Use every token')) {
     limits.set(state.user_id, new Date(Date.now() + 6000).toISOString());
   }
-  return { ...state, attachments: images, stopped, limit_resets_at: resetsAt(state), answer: reply, display_answer: reply, sources: [{ title: 'Evidence', url: 'https://example.com' }] };
+  return { ...state, attachments: images, stopped, limit_resets_at: resetsAt(state), answer: reply, display_answer: reply, sources };
 }
 createServer(async (request, response) => {
   const url = new URL(request.url, 'http://localhost');
@@ -135,6 +151,11 @@ createServer(async (request, response) => {
   }
   if (url.pathname !== '/api/state' && !state.user_id && !state.guest) { response.statusCode = 401; return json({ detail: 'Log in to continue' }); }
   if (url.pathname === '/api/state') return json({ ...state, conversations: list(owner(state)), limit_resets_at: resetsAt(state), upload_resets_at: uploadResetsAt(state) });
+  if (url.pathname.startsWith('/api/sources/')) {
+    const source = sourceSnapshots.get(url.pathname.split('/').at(-1));
+    if (!source || source.owner !== owner(state) || source.conversation_id !== state.conversation_id || !state.uploads.some(file => file.id === source.file_id)) return missing();
+    return json(source);
+  }
   if (url.pathname === '/api/users') {
     if (request.method === 'POST') {
       const user = { id: users.length + 1, name: JSON.parse(body).name };
@@ -192,7 +213,7 @@ createServer(async (request, response) => {
     const file = form.get('file');
     if (file.name.startsWith('slow')) await new Promise(resolve => setTimeout(resolve, 1500));
     if (!state.conversation_id) activate(state, newConversation(state));
-    const upload = { id: randomUUID(), filename: file.name, status: 'Text ready for chat.', sent: false, edits: [] };
+    const upload = { id: randomUUID(), filename: file.name, text: await file.text(), status: 'Text ready for chat.', sent: false, edits: [] };
     state.uploads.push(upload);
     keepFiles(state);
     return json(upload);
@@ -201,6 +222,21 @@ createServer(async (request, response) => {
     state.uploads = url.searchParams.has('file_id') ? state.uploads.filter(file => file.id !== url.searchParams.get('file_id')) : [];
     keepFiles(state);
     return json({ ok: true });
+  }
+  if (url.pathname === '/api/files/preview' || url.pathname === '/api/files/preview/content') {
+    const file = state.generated_files.find(item => item.id === url.searchParams.get('file_id'));
+    if (!file) return missing();
+    if (url.pathname.endsWith('/content')) {
+      response.setHeader('content-type', 'application/pdf');
+      return response.end(previewPdf);
+    }
+    const base = { filename: file.filename, kind: 'text', text: 'Hello / Xin chào <script>not executed</script>', notice: '', truncated: false };
+    if (file.filename.endsWith('.html')) Object.assign(base, { kind: 'html', text: '<!doctype html><meta http-equiv="refresh" content="0;url=https://example.com/navigate"><h1>Hello / Xin chào</h1><style>body{background:#eee} @import url(https://example.com/style);</style><script>parent.previewPwned=true</script><img src="https://example.com/track"><a href="https://example.com/link" target="_top">External link</a><form action="https://example.com/post"><button>Submit</button></form><iframe src="https://example.com/frame"></iframe>' });
+    if (file.filename.endsWith('.pdf')) Object.assign(base, { kind: 'pdf' });
+    if (file.filename.endsWith('.xlsx')) Object.assign(base, { kind: 'spreadsheet', sheets: [{ name: 'English', rows: [['Hello', '=1+1']] }, { name: 'Tiếng Việt', rows: [['Xin chào']] }] });
+    if (file.filename.endsWith('.pptx')) Object.assign(base, { kind: 'slides', slides: [{ name: 'Slide 1', text: 'Hello / Xin chào' }] });
+    if (file.filename.endsWith('.zip')) Object.assign(base, { kind: 'archive', entries: [{ name: 'README.md', size: 100 }] });
+    return json(base);
   }
   if (url.pathname === '/api/export') {
     const payload = JSON.parse(body);

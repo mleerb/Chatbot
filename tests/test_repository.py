@@ -115,6 +115,33 @@ class RepositoryTests(unittest.TestCase):
             self.user["id"], conversation_id=second["id"]))
         self.assertEqual(repository.messages(999999, conversation_id=self.chat["id"]), [])
 
+    def test_document_source_snapshot_roundtrip_and_authorized_access(self):
+        from app.core.errors import ServiceError
+        from app.schemas.chat import Message as MessageSchema
+        from app.services.citations import Evidence, source_text
+        from app.services.sessions import ChatSession, Page, Upload
+
+        content = 'English evidence. Bằng chứng tiếng Việt. <script>alert(1)</script>'
+        item = Upload('chính-sách.html', content.encode(), content, '', 'Ready', pages=[Page('1', content)])
+        reference = Evidence().read(item, 1, item.pages[0])
+        repository.save_file(self.user['id'], self.chat['id'], 'upload', item.id, item.filename, item.data,
+                             document=content, pages=[('1', content)])
+        self.save('Explain / Giải thích', 'Evidence [D1]', [reference])
+        session = ChatSession(user_id=self.user['id'], conversation_id=self.chat['id'], uploads={item.id: item})
+        stored = repository.messages(self.user['id'], conversation_id=self.chat['id'])[-1]
+        self.assertEqual(stored['sources'][0]['text'], content)
+        self.assertNotIn('text', MessageSchema.model_validate(stored).model_dump()['sources'][0])
+        self.assertEqual(source_text(session, reference['id'])['text'], content)
+        other = repository.create_user('Other source owner')
+        other_chat = repository.create_conversation(other['id'])
+        with self.assertRaises(ServiceError) as denied:
+            source_text(ChatSession(user_id=other['id'], conversation_id=other_chat['id']), reference['id'])
+        self.assertEqual(denied.exception.status_code, 404)
+        repository.delete_files(self.user['id'], self.chat['id'], item.id)
+        with self.assertRaises(ServiceError) as removed:
+            source_text(session, reference['id'])
+        self.assertEqual(removed.exception.status_code, 404)
+
     def test_message_attachments_are_saved_and_listed(self):
         attachments = [{"id": "u1", "filename": "report.pdf"}]
         repository.save_turn(self.user["id"], "Read this", "Done", [], self.chat["id"], attachments)
