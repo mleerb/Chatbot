@@ -76,7 +76,7 @@ class SearchTests(unittest.TestCase):
         sources = []
         with patch('app.tools.search.search_web', side_effect=httpx.TimeoutException('timeout')):
             result = create_search_tool('question', sources).invoke({})
-        self.assertIn('failed', result)
+        self.assertIn('timed out', result)
         self.assertEqual(sources, [])
 
 

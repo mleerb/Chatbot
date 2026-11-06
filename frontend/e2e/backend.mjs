@@ -150,6 +150,7 @@ createServer(async (request, response) => {
     return json({ user });
   }
   if (url.pathname !== '/api/state' && !state.user_id && !state.guest) { response.statusCode = 401; return json({ detail: 'Log in to continue' }); }
+  if (url.pathname === '/api/document/settings') return json({ max_file_bytes: 20971520, max_conversation_files: 20, max_conversation_bytes: 104857600, parsing_enabled: false, text_extensions: ['.txt', '.md', '.csv'], image_extensions: ['.png', '.jpg'], guest_inspection_enabled: !!state.guest });
   if (url.pathname === '/api/state') return json({ ...state, conversations: list(owner(state)), limit_resets_at: resetsAt(state), upload_resets_at: uploadResetsAt(state) });
   if (url.pathname.startsWith('/api/sources/')) {
     const source = sourceSnapshots.get(url.pathname.split('/').at(-1));

@@ -301,6 +301,22 @@ svg { flex: none; }
 .attach-button:hover:not(:disabled) { background: var(--accent-wash); color: var(--accent); }
 .send-button { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 8px 14px; border: 0; border-radius: 8px; background: linear-gradient(110deg,var(--accent),var(--button-end)); color: var(--button-text); font-size: 13px; font-weight: 500; }
 .send-button:disabled { background: var(--line); color: var(--muted); opacity: 1; }
+.upload-help { margin-top: 10px; color: var(--muted); font-size: 11px; }
+.upload-help > summary { cursor: pointer; width: fit-content; padding: 4px; color: var(--accent); }
+.upload-help > div { max-height: 180px; overflow-y: auto; padding: 2px 5px; }
+.upload-help p { margin: 6px 0; line-height: 1.6; overflow-wrap: anywhere; }
+.upload-failures { max-height: 180px; overflow-y: auto; margin-bottom: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.upload-failure { display: flex; gap: 8px; align-items: center; padding: 6px 0; font-size: 12px; }
+.upload-failure > div { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.upload-failure p { margin: 3px 0; color: var(--error); }
+.upload-failures > p { margin: 6px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.file-processing { color: var(--muted); font-size: 10px; }
+.file-processing summary { padding: 3px; cursor: pointer; color: var(--accent); }
+.file-processing[data-warning] summary { color: var(--error); }
+.file-processing[open] { flex: 1 1 100%; order: 1; }
+.file-processing p { margin: 4px; line-height: 1.6; overflow-wrap: anywhere; white-space: normal; }
+.attachment:has(.file-processing[open]) { height: auto; border-radius: 12px; flex-wrap: wrap; padding: 5px 8px; }
+.upload-stage { font-size: 10px; white-space: nowrap; margin-left: 4px; }
 .composer-note { margin: 9px 0 0; color: var(--muted); font-size: 11px; text-align: center; }
 .composer[data-frozen] { opacity: .55; filter: grayscale(.4); }
 .guest-limit { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; width: min(100% - 72px, 748px); margin: 0 auto 4px; padding: 14px 16px; border: 1px solid var(--accent); border-radius: 16px; background: var(--accent-wash); font-size: 13px; }

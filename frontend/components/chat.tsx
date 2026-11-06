@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { errorMessage, rateAnswer, request, stopChat, streamChat, type Files, type Message, type Rating, type State, type User, type Conversation } from '../lib/api';
+import { errorMessage, rateAnswer, request, stopChat, streamChat, type Files, type Message, type Rating, type State, type User, type Conversation, type UploadSettings, type UploadFailure } from '../lib/api';
 import Composer from './composer';
 import Brand from './brand';
 import Conversations from './conversations';
@@ -39,6 +39,8 @@ export default function Chat() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [stopping, setStopping] = useState(false);
   const [uploading, setUploading] = useState<string[]>([]);
+  const [uploadSettings, setUploadSettings] = useState<UploadSettings | null>(null);
+  const [uploadFailures, setUploadFailures] = useState<UploadFailure[]>([]);
   const [collapsed, setCollapsed] = useState(false);
   const [error, setError] = useState('');
   const [warning, setWarning] = useState('');
@@ -130,6 +132,19 @@ export default function Chat() {
       window.removeEventListener('pageshow', returning);
     };
   }, []);
+
+  useEffect(() => {
+    setUploadFailures([]);
+  }, [active, selected, guest]);
+
+  useEffect(() => {
+    if (!ready) { setUploadSettings(null); return; }
+    let active = true;
+    void request<UploadSettings>('/api/document/settings').then(settings => {
+      if (active) setUploadSettings(settings);
+    }).catch(() => { if (active) setUploadSettings(null); });
+    return () => { active = false; };
+  }, [ready, guest, selected]);
 
   useClearAt(resetsAt, setResetsAt);
   useClearAt(uploadResetsAt, setUploadResetsAt);
@@ -249,17 +264,21 @@ export default function Chat() {
     setWarning('');
     setError('');
     setUploading(items.map(file => file.name));
-    const failures: string[] = [];
+    const failures: UploadFailure[] = [];
     try {
       for (const file of items) {
-        const body = new FormData();
-        body.append('file', file);
-        try { await request('/api/document', { method: 'POST', body }); }
-        catch (error) { failures.push(`${file.name}: ${errorMessage(error)}`); }
+        if (uploadSettings && file.size > uploadSettings.max_file_bytes) {
+          failures.push({ id: crypto.randomUUID(), file, message: `File is too large. Maximum upload size is ${uploadSettings.max_file_bytes / 1048576} MiB.` });
+        } else {
+          const body = new FormData();
+          body.append('file', file);
+          try { await request('/api/document', { method: 'POST', body }); }
+          catch (error) { failures.push({ id: crypto.randomUUID(), file, message: errorMessage(error) }); }
+        }
         setUploading(names => names.slice(1));
         try { await refreshFiles(); } catch {}
       }
-      setWarning(failures.join('\n'));
+      setUploadFailures(current => [...current, ...failures]);
     } catch (error) { setWarning(errorMessage(error)); }
     finally {
       uploadingNow.current = false;
@@ -303,7 +322,7 @@ export default function Chat() {
         <button type="button" className="icon-button close-sidebar" aria-label="Close sidebar" title="Close sidebar" onClick={hideSidebar}><Icon name="sidebar" /></button>
       </div>
       <div className="account-info"><span className="account-avatar" aria-hidden="true">{account?.name.slice(0, 1) ?? 'G'}</span><div><strong>{account?.name ?? 'Guest'}</strong><span>{guest ? 'This session only' : account?.email}</span></div></div>
-      {guest && <div className="guest-notice"><strong>Temporary chat</strong><p>Nothing is saved to your account. Guests have one chat at a time: starting a new chat deletes the current one. Closing the tab or restarting the server ends it.</p></div>}
+      {guest && <div className="guest-notice"><strong>Temporary chat</strong><p>Nothing is saved to your account. Guests have one chat at a time: starting a new chat deletes the current one. Closing the tab or restarting the server ends it. If upload inspection is enabled, the operator retains extracted upload text and chunks on disk until manually deleted.</p></div>}
       {(selected || guest) && <Conversations key={selected ?? 'guest'} conversations={conversations} selected={active} busy={locked} canPin={!guest}
         onCreate={async () => { if (!guest || !conversations.length || window.confirm('Start a new chat? Your current guest chat and its files will be deleted.')) await conversationAction('/api/conversations', 'POST'); }}
         onSelect={async id => { await conversationAction(`/api/conversations/${id}/select`, 'POST'); }}
@@ -316,7 +335,7 @@ export default function Chat() {
         </button>
         <button className="theme-toggle" type="button" disabled={locked} onClick={() => { if (guest) endGuest(); else void logout(); }}>{guest ? 'End guest session / Log in' : 'Log out'}</button>
         <a className="workspace-home" href="/">Back to Aster</a>
-        <p>{guest ? 'Guest chats and files last while this tab is open.' : 'Chats and files are saved to your account.'}</p>
+        <p>{guest ? 'Guest chats last while this tab is open. Upload inspection copies may remain on the server.' : 'Chats and files are saved to your account.'}</p>
       </div>
     </dialog>
     <section className="chat-panel" aria-label="Conversation">
@@ -344,7 +363,15 @@ export default function Chat() {
         <div><button type="button" className="primary-button" disabled={locked} onClick={() => endGuest(true)}>Sign up</button>
           <button type="button" className="guest-button" disabled={locked} onClick={() => endGuest()}>Log in</button></div>
       </div>}
-      <Composer disabled={busy || !ready || limited} selected={ready} guest={guest} limited={limited} uploadLimited={!!uploadResetsAt} uploads={files.uploads} pending={uploading}
+      <Composer settings={uploadSettings} failures={uploadFailures}
+        onRetry={async id => {
+          if (working.current || uploadingNow.current) return;
+          const failure = uploadFailures.find(item => item.id === id);
+          if (!failure) return;
+          setUploadFailures(items => items.filter(item => item.id !== id));
+          await upload([failure.file]);
+        }} onDismiss={id => setUploadFailures(items => items.filter(item => item.id !== id))}
+        disabled={busy || !ready || limited} selected={ready} guest={guest} limited={limited} uploadLimited={!!uploadResetsAt} uploads={files.uploads} pending={uploading}
         streaming={pending} stopping={stopping} onStop={() => void stop()} onSend={message => send(message)} onUpload={upload} onRemove={remove} />
     </section>
   </main>;

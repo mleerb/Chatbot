@@ -4,6 +4,7 @@ from urllib.parse import urlsplit
 import httpx
 from langchain_core.tools import tool
 
+from app.core.limits import timeout
 from app.services.citations import web_sources
 
 SEARCH_URL = "https://api.tavily.com/search"
@@ -13,7 +14,7 @@ def search_web(question: str) -> list[dict[str, str]]:
     key = os.getenv("TAVILY_API_KEY", "").strip()
     if not key:
         return []
-    with httpx.Client(timeout=12) as client:
+    with httpx.Client(timeout=timeout("SEARCH_TIMEOUT_SECONDS")) as client:
         response = client.post(
             SEARCH_URL,
             headers={"Authorization": f"Bearer {key}"},
@@ -38,6 +39,8 @@ def create_search_tool(question: str, sources: list[dict[str, str]]):
     def search_current_question() -> str:
         try:
             results = search_web(question)
+        except httpx.TimeoutException:
+            return "Web search timed out. Try again later; no web evidence was verified."
         except (httpx.HTTPError, ValueError):
             return "Web search failed. Do not claim to have found web evidence."
         sources.extend(results)

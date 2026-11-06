@@ -3,6 +3,8 @@ import os
 
 from openai import OpenAI
 
+from app.core.limits import timeout
+
 PNG = b"\x89PNG\r\n\x1a\n"
 SIZES = ("1024x1024", "1536x1024", "1024x1536")
 
@@ -24,7 +26,7 @@ def client():
     base_url = os.getenv("OPENAI_BASE_URL", "").strip()
     if base_url and not base_url.startswith("https://"):
         raise ValueError("OPENAI_BASE_URL must be an HTTPS URL")
-    return OpenAI(base_url=base_url or None, timeout=180)
+    return OpenAI(base_url=base_url or None, timeout=timeout("IMAGE_TIMEOUT_SECONDS"), max_retries=1)
 
 
 def is_png(filename: str, data: bytes) -> bool:

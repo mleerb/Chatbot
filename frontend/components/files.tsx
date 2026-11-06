@@ -4,6 +4,14 @@ import Icon from './icon';
 import FilePreview from './preview';
 import { guestDownload, guestToken } from '../lib/guest';
 
+function ProcessingDetails({ file }: { file: Upload }) {
+  const warning = /unavailable|could not|cannot|no readable|no text|timed out|fallback/i.test(file.status);
+  return <details className="file-processing" data-warning={warning || undefined}>
+    <summary aria-label={`Processing details for ${file.filename}`}>{warning ? 'Check file' : 'Ready'}</summary>
+    <p>{file.status}</p>
+  </details>;
+}
+
 export function AttachedFiles({ uploads, pending, disabled, onRemove }: {
   uploads: Upload[];
   pending: string[];
@@ -16,6 +24,7 @@ export function AttachedFiles({ uploads, pending, disabled, onRemove }: {
       const query = `file_id=${encodeURIComponent(file.id)}`;
       return <div className="attachment" key={file.id} title={`${file.filename} · ${file.status}`}>
         <Icon name="file" /><span className="attachment-name">{file.filename}</span>
+        <ProcessingDetails file={file} />
         {file.edits.map((edit, index) => <a key={edit.id} className="attachment-revision" download={edit.filename} onClick={guestDownload}
           aria-label={`Edited v${index + 1}`} href={`/api/document/edited?${query}&revision_id=${encodeURIComponent(edit.id)}`}>v{index + 1}</a>)}
         <a className="icon-button" href={`/api/document/download?${query}`} download={file.filename} onClick={guestDownload}
@@ -25,7 +34,7 @@ export function AttachedFiles({ uploads, pending, disabled, onRemove }: {
       </div>;
     })}
     {pending.map((name, index) => <div className="attachment pending" key={`pending-${index}`} role="status">
-      <span className="attachment-spinner" aria-hidden="true" /><span className="attachment-name">{name}</span><span className="sr-only">Uploading</span>
+      <span className="attachment-spinner" aria-hidden="true" /><span className="attachment-name">{name}</span><span className="upload-stage">{index === 0 ? 'Uploading / processing' : 'Queued'}</span>
     </div>)}
     {uploads.length > 1 && <button type="button" className="text-button attachment-clear" disabled={disabled}
       onClick={async () => { for (const file of uploads) await onRemove(file.id); }}>Remove all</button>}
@@ -42,6 +51,7 @@ export function MessageFiles({ attachments, uploads }: { attachments: DownloadIn
       </div>;
       return <div className="attachment" key={attachment.id} title={`${file.filename} · ${file.status}`}>
         <Icon name="file" /><span className="attachment-name">{file.filename}</span>
+        <ProcessingDetails file={file} />
         {file.edits.map((edit, index) => <a key={edit.id} className="attachment-revision" download={edit.filename} onClick={guestDownload}
           aria-label={`Edited v${index + 1}`} href={`/api/document/edited?${query}&revision_id=${encodeURIComponent(edit.id)}`}>v{index + 1}</a>)}
         <a className="icon-button" href={`/api/document/download?${query}`} download={file.filename} onClick={guestDownload}

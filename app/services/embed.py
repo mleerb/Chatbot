@@ -8,6 +8,8 @@ import numpy as np
 import tiktoken
 from openai import OpenAI
 
+from app.core.limits import timeout
+
 logger = logging.getLogger(__name__)
 DIMENSIONS = 512
 VERSION = 1
@@ -54,7 +56,7 @@ def request(texts: list[str], config: tuple[str, str]):
             owners.append(number)
             weights.append(len(chunk))
     totals = np.zeros((len(texts), DIMENSIONS), dtype="<f4")
-    with OpenAI(base_url=base_url or None, timeout=20, max_retries=1) as client:
+    with OpenAI(base_url=base_url or None, timeout=timeout("EMBEDDING_TIMEOUT_SECONDS"), max_retries=1) as client:
         for start in range(0, len(chunks), BATCH_SIZE):
             batch = chunks[start:start + BATCH_SIZE]
             response = client.embeddings.create(model=model, input=batch, dimensions=DIMENSIONS, encoding_format="float")

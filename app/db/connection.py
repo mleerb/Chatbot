@@ -7,6 +7,8 @@ from psycopg.conninfo import make_conninfo
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
+from app.core.limits import positive
+
 
 def database_url():
     url = os.getenv("DATABASE_URL", "").strip()
@@ -34,7 +36,7 @@ def get_engine():
     config = database_url()
     return create_engine(
         "postgresql+psycopg://",
-        creator=lambda: psycopg.connect(config, connect_timeout=5),
+        creator=lambda: psycopg.connect(config, connect_timeout=positive("DATABASE_CONNECT_TIMEOUT_SECONDS", 15, True)),
         pool_pre_ping=True,
         hide_parameters=True,
     )

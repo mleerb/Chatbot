@@ -98,8 +98,17 @@ class FakeDatabase:
         return {item["id"] for turn in self.turns.get(user_id, []) if turn["conversation_id"] == conversation_id
                 for item in turn["attachments"]}
 
+    def check_upload_capacity(self, user_id, conversation_id, size):
+        from app.core.limits import check_upload
+
+        items = [item for item in self.files.values() if item["user_id"] == user_id
+                 and item["conversation_id"] == conversation_id and item["kind"] == "upload"]
+        check_upload(size, len(items), sum(len(item["data"]) for item in items))
+
     def save_file(self, user_id, conversation_id, kind, file_id, filename, data, document="", image_url="", status="",
                   pages=(), parent_id=None, embeddings=None):
+        if kind == "upload":
+            self.check_upload_capacity(user_id, conversation_id, len(data))
         self.files[file_id] = {
             "user_id": user_id, "conversation_id": conversation_id, "file_id": file_id, "parent_id": parent_id,
             "kind": kind, "filename": filename, "data": data, "document": document, "image_url": image_url,
@@ -162,7 +171,7 @@ def mock_database(test):
     patches = [patch(f"app.db.repository.{name}", getattr(database, name)) for name in
                ("create_account", "account_by_email", "users", "create_user", "get_user", "messages", "save_turn", "rate_message", "conversations",
                 "create_conversation", "get_conversation", "update_conversation", "delete_conversation",
-                "save_file", "update_file_text", "update_file_embeddings", "conversation_files", "delete_files", "attached_file_ids",
+                "save_file", "check_upload_capacity", "update_file_text", "update_file_embeddings", "conversation_files", "delete_files", "attached_file_ids",
                 "usage", "add_usage", "add_count", "remove_count")]
     patches.append(patch("app.db.repository.initialize"))
     for item in patches:

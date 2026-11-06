@@ -269,7 +269,9 @@ test('daily upload limit disables attaching after five files', async ({ page }) 
   await page.getByLabel('Choose files').setInputFiles(Array.from({ length: 6 }, (_, index) => (
     { name: `file-${index + 1}.txt`, mimeType: 'text/plain', buffer: Buffer.from(String(index)) })));
   await expect(page.locator('.attachment:not(.pending)')).toHaveCount(5);
-  await expect(page.getByText('file-6.txt: Daily upload limit reached (5 files a day).')).toBeVisible();
+  await expect(page.getByLabel('Failed uploads')).toContainText('file-6.txt');
+  await expect(page.getByLabel('Failed uploads')).toContainText('Daily upload limit reached (5 files a day).');
+  await expect(page.getByLabel('Retry file-6.txt')).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Attach files' })).toBeDisabled();
   await page.getByLabel('Your message').fill('Read these');
   await page.getByRole('button', { name: 'Send message' }).click();

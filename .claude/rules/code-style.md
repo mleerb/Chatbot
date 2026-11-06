@@ -11,4 +11,4 @@
 - `frontend/app/` owns App Router pages and the streaming API proxy, `frontend/components/` owns React UI, and `frontend/lib/` owns API types and proxy logic.
 - `app/main.py` assembles the backend, `app/routers/` owns HTTP endpoints, `app/schemas/` defines API models, `app/dependencies.py` injects browser sessions, `app/services/` owns workflows, `app/db/` owns PostgreSQL access, and `app/core/` holds configuration, errors, shared file types, and tracing.
 - `app/tools/` holds agent tools and `app/formats/` holds file encoders.
-- There is no static frontend under `app/` and no terminal entry point. `docs/architecture.md` maps tasks to modules and tests.
+- There is no static frontend under `app/` and no terminal chat entry point. Host-only storage/recovery commands live under `scripts/`, never in agent tools or HTTP routes. `docs/architecture.md` maps tasks to modules and tests.

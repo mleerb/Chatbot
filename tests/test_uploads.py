@@ -1,3 +1,4 @@
+import os
 import unittest
 from unittest.mock import patch
 
@@ -46,7 +47,7 @@ class UploadTests(unittest.TestCase):
                 self.assertNotIn(field, result)
 
     def test_many_uploads_and_duplicate_names_have_independent_downloads(self):
-        with patch('app.services.quota.UPLOAD_LIMIT', 25):
+        with patch('app.services.quota.UPLOAD_LIMIT', 25), patch.dict(os.environ, {'CONVERSATION_MAX_FILES': '30'}):
             items = [self.upload('same.txt', str(index).encode()) for index in range(25)]
         self.assertEqual(len({item['id'] for item in items}), 25)
         self.assertEqual(len(self.client.get('/api/state').json()['uploads']), 25)

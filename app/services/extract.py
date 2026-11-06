@@ -63,21 +63,37 @@ def parse_key(filename: str, data: bytes) -> str:
 
 
 def upload_context(filename: str, data: bytes,
-                   cache: dict[str, list[tuple[int, str]]] | None = None) -> tuple[str, str, str, list[Page]]:
+                   cache: dict[str, list[tuple[int, str]]] | None = None,
+                   inspection: dict | None = None) -> tuple[str, str, str, list[Page]]:
     text, image_url, status = file_context(filename, data)
+    if inspection is not None:
+        inspection.update(parser="local", parse_result="not_requested", extracted=text, source_pages=[])
     if not data or not parse.enabled():
         return text, image_url, status, text_pages(text)
     key = parse_key(filename, data)
     parsed = cache.get(key) if cache is not None else None
+    if inspection is not None:
+        inspection["parse_result"] = "cache_hit" if parsed is not None else "requested"
     if parsed is None:
         try:
             parsed = parse.parse_file(filename, data)
+        except (parse.PollingTimeoutError, parse.APITimeoutError):
+            if inspection is not None:
+                inspection["parse_result"] = "timeout_local_fallback"
+            return text, image_url, f"LlamaParse timed out. Local extraction fallback: {status}", text_pages(text)
         except parse.ParseError:
+            if inspection is not None:
+                inspection["parse_result"] = "failed_local_fallback"
             return text, image_url, f"LlamaParse could not read this file. {status}", text_pages(text)
         if parsed and cache is not None:
             cache[key] = parsed
     if not parsed:
+        if inspection is not None:
+            inspection["parse_result"] = "empty_local_fallback"
         return text, image_url, f"LlamaParse found no readable text. {status}", text_pages(text)
+    if inspection is not None:
+        inspection.update(parser="llamaparse", extracted="\n\n".join(text for _, text in parsed),
+                          source_pages=[{"label": str(number), "characters": len(text)} for number, text in parsed])
     pages = source_pages(parsed)
     document = "\n\n".join(page.text for page in pages)
     if image_url:

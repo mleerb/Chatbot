@@ -3,9 +3,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app.core import config
+from app.core import config, limits
 from app.core.errors import ServiceError
-from app.core.trace import flush_traces
+from app.core.trace import excluded_route, flush_traces, get_tracing_client, tracing_enabled
 from app.db import repository
 from app.db.connection import dispose_engine
 from app.routers import router
@@ -14,6 +14,9 @@ from app.routers import router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
+        limits.validate()
+        if tracing_enabled():
+            get_tracing_client()
         repository.initialize()
         yield
     finally:
@@ -24,7 +27,9 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    application = FastAPI(title="Aster", lifespan=lifespan)
+    application = FastAPI(title="Aster", lifespan=lifespan, telemetry={
+        "tracing": False, "operation_spans": False, "exclude": excluded_route,
+    })
     application.include_router(router)
 
     @application.exception_handler(ServiceError)

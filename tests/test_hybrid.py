@@ -243,7 +243,7 @@ class EmbeddingClientTests(unittest.TestCase):
         for call in client.embeddings.create.call_args_list:
             self.assertLessEqual(len(call.kwargs["input"]), 2)
             self.assertTrue(all(len(tokens) <= 3 for tokens in call.kwargs["input"]))
-        self.assertEqual(factory.call_args.kwargs["timeout"], 20)
+        self.assertEqual(factory.call_args.kwargs["timeout"], 60)
         self.assertEqual(factory.call_args.kwargs["max_retries"], 1)
 
     def test_incomplete_provider_response_is_rejected(self):

@@ -1,0 +1,8 @@
+services:
+  app:
+    user: "${WORKSPACE_UID:?Set WORKSPACE_UID to your host UID}:${WORKSPACE_GID:?Set WORKSPACE_GID to your host GID}"
+    environment:
+      WORKSPACE_EXPORT_ENABLED: "true"
+      WORKSPACE_EXPORT_DIR: /app/.workspace
+    volumes:
+      - ./.workspace:/app/.workspace

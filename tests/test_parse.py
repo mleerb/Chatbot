@@ -85,10 +85,10 @@ class ParseTests(unittest.TestCase):
             "app.services.parse.LlamaCloud", return_value=client
         ) as factory:
             self.assertEqual(parse.parse_file("deck.pptx", b"data"), [(1, "Page one"), (3, "Page three")])
-        factory.assert_called_once_with(api_key="test-key", timeout=60, max_retries=2)
+        factory.assert_called_once_with(api_key="test-key", timeout=90, max_retries=2)
         client.parsing.parse.assert_called_once_with(
             tier="agentic", version="latest", upload_file=("deck.pptx", b"data"),
-            expand=["markdown"], timeout=parse.PARSE_TIMEOUT,
+            expand=["markdown"], timeout=600,
         )
 
     def test_unknown_tier_uses_default(self):

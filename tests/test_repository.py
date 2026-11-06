@@ -39,6 +39,26 @@ class RepositoryTests(unittest.TestCase):
     def save(self, question="Question", answer="Answer", sources=None, chat=None):
         repository.save_turn(self.user["id"], question, answer, sources or [], (chat or self.chat)["id"])
 
+    def test_upload_capacity_is_enforced_on_storage_and_existing_rows_survive(self):
+        from app.core.errors import ServiceError
+        from app.core.limits import MIB
+
+        uid, cid = self.user["id"], self.chat["id"]
+        with patch.dict(os.environ, {"UPLOAD_MAX_MB": "2", "CONVERSATION_MAX_FILES": "1",
+                                     "CONVERSATION_MAX_UPLOAD_MB": "2"}):
+            repository.save_file(uid, cid, "upload", "kept", "kept.txt", b"old")
+            repository.save_file(uid, cid, "revision", "revision", "kept.txt", b"revision", parent_id="kept")
+            repository.save_file(uid, cid, "generated", "generated", "out.txt", b"out")
+            with self.assertRaises(ServiceError):
+                repository.save_file(uid, cid, "upload", "blocked", "blocked.txt", b"new")
+            self.assertEqual(len(repository.conversation_files(uid, cid)), 3)
+            with patch.dict(os.environ, {"CONVERSATION_MAX_FILES": "3", "CONVERSATION_MAX_UPLOAD_MB": "1"}):
+                with self.assertRaises(ServiceError):
+                    repository.save_file(uid, cid, "upload", "too-much", "large.txt", b"x" * MIB)
+            other = repository.create_conversation(uid)
+            repository.save_file(uid, other["id"], "upload", "other", "other.txt", b"other")
+            self.assertEqual(repository.conversation_files(uid, cid)[0]["data"], b"old")
+
     def test_file_embedding_migration_preserves_data_and_backfill_is_scoped(self):
         repository.save_file(self.user["id"], self.chat["id"], "upload", "embedding-old", "old.txt", b"old",
                              document="original")
@@ -324,6 +344,28 @@ class PostgresRepositoryTests(RepositoryTests):
 
         self.addCleanup(cleanup)
         return engine
+
+    def test_concurrent_uploads_share_one_locked_capacity_budget(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+        from app.core.errors import ServiceError
+
+        barrier = Barrier(2)
+
+        def upload(number):
+            barrier.wait(timeout=10)
+            try:
+                repository.save_file(self.user["id"], self.chat["id"], "upload",
+                                     f"parallel-{number}", "test.txt", b"test")
+                return "saved"
+            except ServiceError as exc:
+                return exc.status_code
+
+        with patch.dict(os.environ, {"CONVERSATION_MAX_FILES": "1"}):
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                results = list(pool.map(upload, [1, 2]))
+        self.assertCountEqual(results, ["saved", 409])
+        self.assertEqual(len(repository.conversation_files(self.user["id"], self.chat["id"])), 1)
 
     def test_auth_api_with_postgresql(self):
         from fastapi.testclient import TestClient

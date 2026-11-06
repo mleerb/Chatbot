@@ -15,6 +15,14 @@ __pycache__/
 .docker.env
 !.docker.env.example
 compose.override.yaml
+.workspace/
+backups/
+*.dump
+*.backup
+*.sql
+*.sql.gz
+*.sql.xz
+*.dump.gz
 documents/*
 !documents/.gitkeep
 reports/

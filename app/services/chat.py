@@ -2,6 +2,9 @@ import logging
 import queue
 import threading
 
+import httpx
+from openai import APITimeoutError
+
 from app.core.errors import ServiceError
 from app.core.trace import score_answer
 from app.db import repository
@@ -106,6 +109,9 @@ def finish_turn(token: str, session: ChatSession, question: str, replace_from: i
         )
     except ServiceError:
         raise
+    except (TimeoutError, httpx.TimeoutException, APITimeoutError) as exc:
+        logger.warning("Chat provider timed out")
+        raise ServiceError(504, "The AI provider timed out. Your uploaded files are unchanged. Try again or ask a shorter question.") from exc
     except Exception as exc:
         logger.exception("Chat request failed")
         raise ServiceError(502, "Could not get an answer. Check the server log and model settings.") from exc

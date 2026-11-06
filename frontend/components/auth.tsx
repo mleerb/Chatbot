@@ -47,7 +47,7 @@ export default function Auth({ onSuccess, onGuest, signup = false }: { onSuccess
         <button className="primary-button" disabled={busy}>{busy ? 'Please wait…' : register ? 'Create account' : 'Log in'}</button>
       </form>
       <button type="button" className="guest-button" disabled={busy} onClick={continueAsGuest}>Continue as guest</button>
-      <p className="auth-hint guest-hint">No account needed. Guest chats are temporary and aren’t saved to your account.</p>
+      <p className="auth-hint guest-hint">No account needed. Guest chats are temporary and aren’t saved to your account. If upload inspection is enabled, extracted upload text and chunks are retained on the server until manually deleted.</p>
       <button type="button" className="auth-switch" disabled={busy} onClick={() => { setRegister(!register); setError(''); }}>{register ? 'Already have an account? Log in' : 'New here? Create an account'}</button>
     </div>
     <p className="auth-footnote">Log in to keep your history, or try a temporary guest chat.<br />AI answers need review.</p>

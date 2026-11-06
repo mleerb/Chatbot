@@ -75,7 +75,8 @@ class WebTests(unittest.TestCase):
         text = b'# Heading\n' + b'a' * 1_000_001
         response = self.client.post('/api/document', files={'file': ('big.md', text)})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()['status'], 'Text ready for chat.')
+        self.assertIn('Text ready for chat.', response.json()['status'])
+        self.assertIn('keyword search', response.json()['status'])
         self.assertEqual(self.client.get('/api/state').json()['uploads'][0]['filename'], 'big.md')
         self.assertEqual(next(iter(sessions.values())).latest_upload.document, text.decode('utf-8'))
 

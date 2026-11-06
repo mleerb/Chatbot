@@ -1,5 +1,6 @@
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 
+from app.core import limits
 from app.db.connection import get_engine, session
 from app.db.models import Account, ChatFile, Conversation, Message, Usage, User
 from app.db.schema import initialize_schema
@@ -175,9 +176,29 @@ def file_data(item):
     )}
 
 
+def upload_usage(database, user_id, conversation_id):
+    count, size = database.execute(select(
+        func.count(ChatFile.id), func.coalesce(func.sum(func.length(ChatFile.data)), 0),
+    ).where(ChatFile.user_id == user_id, ChatFile.conversation_id == conversation_id,
+            ChatFile.kind == "upload")).one()
+    return count, size
+
+
+def check_upload_capacity(user_id, conversation_id, size):
+    with session() as database:
+        limits.check_upload(size, *upload_usage(database, user_id, conversation_id))
+
+
 def save_file(user_id, conversation_id, kind, file_id, filename, data, document="", image_url="", status="",
               pages=(), parent_id=None, embeddings=None):
     with session() as database:
+        if kind == "upload":
+            conversation = database.scalar(select(Conversation).where(
+                Conversation.id == conversation_id, Conversation.user_id == user_id,
+            ).with_for_update())
+            if conversation is None:
+                raise LookupError("Conversation not found")
+            limits.check_upload(len(data), *upload_usage(database, user_id, conversation_id))
         database.add(ChatFile(
             user_id=user_id, conversation_id=conversation_id, kind=kind, file_id=file_id, filename=filename,
             data=data, document=document, image_url=image_url, status=status, pages=[list(page) for page in pages],

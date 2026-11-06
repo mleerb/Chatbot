@@ -36,7 +36,7 @@ def fallback(question: str) -> str:
 
 
 def generate(question: str, answer: str) -> str:
-    model = chat_model()
+    model = chat_model("TITLE_TIMEOUT_SECONDS")
     if isinstance(model, str):
         model = init_chat_model(model)
     prompt = render_prompt("title.j2", question=question[:MAX_EXCERPT], answer=answer[:MAX_EXCERPT])

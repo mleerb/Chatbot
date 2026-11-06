@@ -29,7 +29,7 @@ class AppTests(unittest.TestCase):
         self.assertEqual(set(schema["paths"]), {
             "/api/auth/me", "/api/auth/login", "/api/auth/register", "/api/auth/logout", "/api/auth/guest", "/api/auth/guest/close",
             "/api/state", "/api/chat", "/api/chat/stream", "/api/chat/stop", "/api/chat/rating", "/api/document", "/api/document/download",
-            "/api/document/edited", "/api/users", "/api/users/{user_id}/select",
+            "/api/document/edited", "/api/document/settings", "/api/users", "/api/users/{user_id}/select",
             "/api/users/{user_id}/messages", "/api/files/download", "/api/files/view", "/api/files/preview", "/api/files/preview/content", "/api/conversations",
             "/api/conversations/{conversation_id}", "/api/conversations/{conversation_id}/select", "/api/export", "/api/sources/{source_id}",
         })
@@ -112,6 +112,16 @@ class AppTests(unittest.TestCase):
                 self.assertEqual(client.get("/health").status_code, 200)
                 flush.assert_not_called()
             flush.assert_called_once_with()
+
+    def test_lifespan_initializes_configured_tracing_before_serving_requests(self):
+        with patch("app.main.tracing_enabled", return_value=True), patch(
+            "app.main.get_tracing_client"
+        ) as tracing, patch("app.db.repository.initialize"), patch("app.main.flush_traces"), patch(
+            "app.main.dispose_engine"
+        ):
+            with TestClient(self.app) as client:
+                tracing.assert_called_once_with()
+                self.assertEqual(client.get("/health").status_code, 200)
 
     def test_lifespan_disposes_engine_after_shutdown(self):
         with patch("app.db.repository.initialize"), patch("app.main.flush_traces"), patch(
