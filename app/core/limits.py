@@ -40,8 +40,8 @@ def timeout(name: str) -> float:
 
 def validate():
     upload_limits()
-    for name in TIMEOUTS:
-        positive(name, TIMEOUTS[name], name in {"LANGFUSE_TIMEOUT_SECONDS", "DATABASE_CONNECT_TIMEOUT_SECONDS"})
+    for name, default in TIMEOUTS.items():
+        positive(name, default, name in {"LANGFUSE_TIMEOUT_SECONDS", "DATABASE_CONNECT_TIMEOUT_SECONDS"})
 
 
 def check_upload(size: int, count: int = 0, total: int = 0):

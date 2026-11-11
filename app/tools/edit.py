@@ -6,11 +6,11 @@ from docx import Document
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from app.services.sessions import Download, sessions, sessions_lock
-from app.services.extract import file_context
-from app.services import embed, storage
-from app.services.pages import text_pages
 from app.core.file_types import TEXT_EXTENSIONS
+from app.services import embed, storage
+from app.services.extract import file_context
+from app.services.pages import text_pages
+from app.services.sessions import Download, sessions, sessions_lock
 
 
 class FileEdit(BaseModel):

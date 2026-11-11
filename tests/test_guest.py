@@ -6,8 +6,8 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.services.auth import attempts
 from app.services import guest, quota
+from app.services.auth import attempts
 from app.services.sessions import COOKIE, GUEST_COOKIE, sessions
 from tests.fake_database import mock_database
 
@@ -296,6 +296,7 @@ class GuestTests(unittest.TestCase):
 
     def test_answer_reports_model_token_usage(self):
         from unittest.mock import Mock
+
         from app.services.agent import answer_question
 
         agent = Mock()

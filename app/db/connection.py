@@ -50,6 +50,5 @@ def dispose_engine():
 
 @contextmanager
 def session():
-    with Session(get_engine()) as database:
-        with database.begin():
-            yield database
+    with Session(get_engine()) as database, database.begin():
+        yield database

@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, time, timedelta, timezone
+from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from app.core.errors import ServiceError
@@ -15,7 +15,7 @@ IMAGE_LIMIT_MESSAGE = "Daily image limit reached; no image was created. Tell the
 
 
 def now():
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def today():
@@ -23,7 +23,7 @@ def today():
 
 
 def midnight(day):
-    return datetime.combine(day, time(), LIMIT_TIMEZONE).astimezone(timezone.utc)
+    return datetime.combine(day, time(), LIMIT_TIMEZONE).astimezone(UTC)
 
 
 def next_midnight():
@@ -35,7 +35,7 @@ def current(user_id):
     if item is None:
         return None
     start = item["window_start"]
-    start = start if start.tzinfo else start.replace(tzinfo=timezone.utc)
+    start = start if start.tzinfo else start.replace(tzinfo=UTC)
     return item if start >= midnight(today()) else None
 
 

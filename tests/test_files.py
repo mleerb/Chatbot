@@ -3,12 +3,11 @@ import unittest
 from unittest.mock import patch
 
 from docx import Document
-
 from fastapi.testclient import TestClient
 
+from app.main import app
 from app.services.sessions import sessions
 from app.tools.create import create_file_tool, validate_file
-from app.main import app
 from tests.fake_database import mock_database
 
 
@@ -62,7 +61,7 @@ class GeneratedFileTests(unittest.TestCase):
         }
         for filename, content in examples.items():
             with self.subTest(filename=filename):
-                def reply(agent, *args, **kwargs):
+                def reply(agent, *args, filename=filename, content=content, **kwargs):
                     result = agent.invoke({'filename': filename, 'content': content})
                     self.assertIn('Created downloadable file', result)
                     return 'File ready / Tệp đã sẵn sàng.'
@@ -97,7 +96,7 @@ class GeneratedFileTests(unittest.TestCase):
             with self.subTest(extension=extension):
                 filename, data = validate_file('example' + extension, 'Hello / Xin chào')
                 self.assertEqual(filename, 'example' + extension)
-                self.assertEqual(data, 'Hello / Xin chào'.encode('utf-8'))
+                self.assertEqual(data, 'Hello / Xin chào'.encode())
 
     def test_invalid_extensions_paths_and_large_outputs(self):
         for filename in ('../bad.md', 'dir/file.txt', r'dir\\file.txt', 'program.exe', 'image.png', ''):

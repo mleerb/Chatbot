@@ -1,19 +1,19 @@
 import os
 import threading
+from collections.abc import Iterator
 from contextlib import nullcontext
-from typing import Iterator
 
 from deepagents import create_deep_agent
 from langchain_core.messages import AIMessage, AIMessageChunk
 
-from app.services.context import conversation_messages, response_text
-from app.services.citations import current
-from app.services.model import chat_model
-from app.services.steps import step_label
-from app.prompts import render_prompt
-from app.tools import tools_for_turn
 from app.core.trace import trace_chat_turn
+from app.prompts import render_prompt
+from app.services.citations import current
+from app.services.context import conversation_messages, response_text
+from app.services.model import chat_model
 from app.services.sessions import Upload
+from app.services.steps import step_label
+from app.tools import tools_for_turn
 
 
 def make_agent(session_id: str | None = None, question: str = "", sources: list[dict] | None = None):

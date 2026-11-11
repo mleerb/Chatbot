@@ -1,5 +1,5 @@
 import unittest
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -59,10 +59,10 @@ class QuotaTests(unittest.TestCase):
         self.assertEqual(self.database.usages[1]['window_start'], midnight)
 
     def test_day_follows_limit_timezone(self):
-        evening = datetime(2026, 10, 23, 16, 59, tzinfo=timezone.utc)
+        evening = datetime(2026, 10, 23, 16, 59, tzinfo=UTC)
         with patch('app.services.quota.now', return_value=evening):
             self.assertEqual(quota.today(), date(2026, 10, 23))
-            self.assertEqual(quota.next_midnight(), datetime(2026, 10, 23, 17, tzinfo=timezone.utc))
+            self.assertEqual(quota.next_midnight(), datetime(2026, 10, 23, 17, tzinfo=UTC))
             self.use_tokens(90)
         with patch('app.services.quota.now', return_value=evening + timedelta(minutes=1)):
             self.assertEqual(quota.today(), date(2026, 10, 24))

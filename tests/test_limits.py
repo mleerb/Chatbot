@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
 from fastapi.testclient import TestClient
+
 from app.core import limits
 from app.core.errors import ServiceError
 from app.main import app
@@ -144,9 +145,8 @@ class TimeoutSettingsTests(unittest.TestCase):
             with self.subTest(value=value), patch.dict(os.environ, {"CHAT_TIMEOUT_SECONDS": value}):
                 with self.assertRaises(ValueError):
                     limits.validate()
-        with patch.dict(os.environ, {"UPLOAD_MAX_MB": "1.5"}):
-            with self.assertRaises(ValueError):
-                limits.upload_limits()
+        with patch.dict(os.environ, {"UPLOAD_MAX_MB": "1.5"}), self.assertRaises(ValueError):
+            limits.upload_limits()
 
     def test_chat_gateway_and_provider_initialization_receive_timeouts(self):
         from app.services.model import chat_model

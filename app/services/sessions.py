@@ -1,6 +1,7 @@
+import secrets
 import threading
-from collections import OrderedDict
 import time
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from uuid import uuid4
 
@@ -13,6 +14,10 @@ MAX_SESSIONS = 100
 
 def file_id() -> str:
     return uuid4().hex
+
+
+def inspect_id() -> str:
+    return f"s-{secrets.token_hex(4)}"
 
 
 @dataclass
@@ -71,6 +76,7 @@ class ChatSession:
     account: dict | None = None
     guest: bool = False
     guest_meter: str | None = None
+    session_id: str = field(default_factory=inspect_id)
     close_timer: threading.Timer | None = field(default=None, repr=False)
     guest_chats: dict[int, GuestChat] = field(default_factory=dict)
     parsed: dict[str, list[tuple[int, str]]] = field(default_factory=dict)
@@ -110,6 +116,7 @@ class ChatSession:
         self.account = None
         self.guest = False
         self.guest_meter = None
+        self.session_id = inspect_id()
         self.conversation_id = None
         self.history.clear()
         self.evidence = None

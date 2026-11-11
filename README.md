@@ -6,13 +6,13 @@ A local-first AI chat workspace built with **Next.js, FastAPI, Deep Agents and P
 
 ## Features
 
-- **Accounts and saved conversations:** email/password registration, Argon2id password hashing, and account-scoped history with automatic titles, rename, pin and delete actions.
+- **Accounts and saved conversations:** email/password registration, Argon2id password hashing, and account-scoped history with automatic titles, rename, pin and delete actions, and a sidebar search box that filters conversations by title.
 - **Guest chat:** no registration required. A guest has one temporary chat at a time; starting a new chat deletes the current one and its files. Each browser has a hidden guest token budget (`GUEST_TOKEN_LIMIT`, default 50,000) shared by all its guest tabs; once it is used up, guest chat is blocked in that browser until midnight, even after closing the tab, unless the guest logs in or signs up.
 - **Daily account limit:** each account can use `USER_TOKEN_LIMIT` tokens (default 500,000) per day. Once it is used up, chat and uploads pause until midnight and the workspace shows when they reopen; saved conversations stay readable. Each account and each guest browser can also upload `UPLOAD_LIMIT` files a day (default 5). All guest and account limits reset at 00:00 in `LIMIT_TIMEZONE` (default `Asia/Ho_Chi_Minh`).
 - **New upload limits:** configurable defaults of 20 MiB per file, 20 original files and 100 MiB of original upload data per conversation. Limits reject new uploads only; existing files are preserved. Provider timeouts are configurable with slow-network defaults. See [completion status](docs/completion.md).
 - **File context:** read DOCX, UTF-8 text and images with a vision-capable model, or any file type through optional LlamaParse. Upload multiple files and manage them independently.
 - **Storage and recovery:** operator-only storage reports, private database/workspace backups, isolated PostgreSQL restore verification and explicit-ID snapshot cleanup with dry-run and typed confirmation. No automatic deletion; see [storage guide](docs/storage.md).
-- **Upload inspection (opt-in):** export new account uploads to a private, Git-ignored `.workspace/` folder with extracted text, exact split chunks, source labels and processing results. Guest exports require the separate `WORKSPACE_EXPORT_GUESTS=true` opt-in. This machine enables both through a private Compose override, so guest upload text also persists on disk. See [workspace setup](docs/setup.md#upload-inspection-workspace) before enabling; these debug copies persist independently of app file deletion.
+- **Upload inspection (opt-in):** export new account uploads to a private, Git-ignored `.workspace/` folder with a session ID, a readable `split.md` showing how each file was split, extracted text, exact split chunks, source labels and processing results. Guest exports require the separate `WORKSPACE_EXPORT_GUESTS=true` opt-in. This machine enables both through a private Compose override, so guest upload text also persists on disk. See [workspace setup](docs/setup.md#upload-inspection-workspace) before enabling; these debug copies persist independently of app file deletion.
 - **Edits and downloads:** keep uploaded originals, download text/DOCX revisions, and generate standalone text/code/data files (`.txt`, `.md`, `.csv`, `.json`, `.xml`, `.yaml`, `.yml`, `.html`, `.css`, `.js`, `.py`, `.log`, `.ini`), DOCX, PDF, XLSX or PPTX. Each requested file has its own download; ZIP is used only when an archive is explicitly requested.
 - **Preview before download:** generated files have separate Preview and Download actions. HTML offers an isolated static visual preview and escaped source; PDFs render locally with page navigation/zoom; Office files show extracted text or sheet values, ZIP shows entries, and PNG shows the image. Previews are bounded and never execute file scripts or formulas.
 - **Image generation (optional, off by default):** set `IMAGE_MODEL` to an image model your OpenAI key or gateway offers, and the assistant can create PNG images that appear under its answer, limited to `IMAGE_LIMIT` (default 10) per account and `GUEST_IMAGE_LIMIT` (default 2) per guest browser a day.
@@ -114,14 +114,14 @@ Provider requests can incur charges. Use an image-capable model for image upload
 
 The [final acceptance](docs/acceptance.md) completed regression, live tracing-redaction read-back and a zero-observation health window. **Live account content tracing remains enabled on this machine**; redaction was verified only with content disabled in isolated workers. Persistent guest/account inspection copies also remain enabled by operator choice. No public-ready or fully private deployment claim is made.
 
-The [document acceptance audit](docs/document-audit.md) verified eight live synthetic chat cases, including long-PDF citations, Vietnamese text, scanned-PDF OCR, missing information and conversation isolation. **Semantic retrieval is currently blocked on this machine:** the configured embedding gateway rejects `text-embedding-3-small` with HTTP 400, so long-file search falls back to keywords. Choose a compatible embedding configuration and revalidate before treating multilingual semantic search as ready.
+The [document acceptance audit](docs/document-audit.md) verified eight live synthetic chat cases, including long-PDF citations, Vietnamese text, scanned-PDF OCR, missing information and conversation isolation. **Semantic retrieval is on:** since 11/11 this machine uses `EMBEDDING_MODEL=nano/text-embedding-3-small`, because the gateway only serves embeddings under its `nano/` prefix (the plain name returns HTTP 400). Long-file search combines meaning and keywords (see [setup](docs/setup.md)). Choose a compatible embedding configuration and revalidate before treating multilingual semantic search as ready.
 
 ## Development and validation
 
 Run backend tests in a temporary app container using the built image:
 
 ```bash
-docker compose run --rm --no-deps --env LLAMA_CLOUD_API_KEY= --env EMBEDDING_MODEL= --volume "$PWD/scripts:/app/scripts:ro" --volume "$PWD/tests:/app/tests:ro" app python -m unittest discover -s tests
+docker compose run --rm --no-deps --env LLAMA_CLOUD_API_KEY= --env EMBEDDING_MODEL= --env WORKSPACE_EXPORT_ENABLED=false --volume "$PWD/scripts:/app/scripts:ro" --volume "$PWD/tests:/app/tests:ro" app python -m unittest discover -s tests
 ```
 
 Optional PostgreSQL integration tests require a **separate disposable database**. Never point them at your saved application data.

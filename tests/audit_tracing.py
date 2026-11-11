@@ -2,9 +2,8 @@ import argparse
 import json
 import os
 import subprocess
-import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -13,12 +12,12 @@ FIELDS = "core,basic,time,io,metadata,model,usage,prompt,metrics,trace_context"
 
 
 def timestamp():
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def execute(arguments, *, input=None, env=None, timeout=180):
-    result = subprocess.run(arguments, cwd=ROOT, input=input, stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE, env=env, timeout=timeout)
+    result = subprocess.run(arguments, cwd=ROOT, input=input, capture_output=True,
+                            env=env, timeout=timeout, check=False)
     if result.returncode:
         raise RuntimeError("Audit subprocess failed; private output withheld")
     return result.stdout
@@ -44,6 +43,7 @@ def worker(run_id, control=False):
     from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
     from langchain_core.messages import AIMessage, AIMessageChunk
     from langchain_core.outputs import ChatGenerationChunk
+
     from app.core import trace
     from app.services.agent import answer_question, stream_answer
     from app.services.sessions import ChatSession, Page, Upload, sessions, sessions_lock
@@ -164,7 +164,7 @@ def invoke_worker(run_id, control=False):
 
 
 def wait_for_trace(env, identifier):
-    for attempt in range(12):
+    for _ in range(12):
         rows = observations(env, trace_id=identifier)
         if rows:
             return rows

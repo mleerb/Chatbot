@@ -38,7 +38,9 @@ class StorageOperationsTests(unittest.TestCase):
         self.assertEqual(storage.workspace_report(self.root / "absent")["snapshot_count"], 0)
 
     def test_default_and_explicit_dry_run_never_prompt_or_delete(self):
-        confirm = lambda _: self.fail("Dry-run must not prompt")
+        def confirm(_):
+            self.fail("Dry-run must not prompt")
+
         self.quiet(storage.cleanup, self.workspace, [self.identifier], confirm=confirm)
         self.assertTrue(self.target.exists())
         with self.assertRaises(ValueError):
@@ -49,7 +51,9 @@ class StorageOperationsTests(unittest.TestCase):
         other = self.workspace / "uploads" / ("b" * 32)
         other.mkdir()
         (other / "extracted.txt").write_text("retain")
-        confirm = lambda prompt: prompt.split("Type ", 1)[1].split(" to delete", 1)[0]
+        def confirm(prompt):
+            return prompt.split("Type ", 1)[1].split(" to delete", 1)[0]
+
         self.quiet(storage.cleanup, self.workspace, [self.identifier, self.identifier], True, confirm)
         self.assertFalse(self.target.exists())
         self.assertTrue(other.exists())

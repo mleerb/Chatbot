@@ -94,9 +94,8 @@ class DatabaseTests(unittest.TestCase):
             constructor.return_value.__exit__.assert_called_once_with(None, None, None)
 
     def test_missing_url_is_rejected(self):
-        with patch.dict(os.environ, {}, clear=True):
-            with self.assertRaises(RuntimeError):
-                database_url()
+        with patch.dict(os.environ, {}, clear=True), self.assertRaises(RuntimeError):
+            database_url()
 
 
 if __name__ == "__main__":

@@ -142,6 +142,9 @@ svg { flex: none; }
 .conversation-heading .text-button { min-height: 42px; padding: 10px 12px; border: 1px solid var(--glass-border); border-radius: 9px; background: var(--glass-chip); color: var(--accent); text-align: left; font-size: 13px; font-weight: 500; box-shadow: 0 1px 2px rgb(0 0 0 / .02); }
 .conversation-heading .text-button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-wash); text-decoration: none; }
 .conversation-heading h2 { margin-bottom: 0; font-size: 11px; letter-spacing: 0; }
+.conversation-search { margin-bottom: 10px; }
+.conversation-search input { width: 100%; min-height: 38px; padding: 8px 10px; border: 1px solid var(--glass-border); border-radius: 9px; background: var(--surface); color: var(--text); font-size: 13px; }
+.conversation-search input:focus-visible { border-color: var(--accent); outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 .conversation-list { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .conversation-item { min-width: 0; padding: 4px; border: 1px solid transparent; border-radius: 9px; }
 .conversation-item:hover { background: var(--hover); }

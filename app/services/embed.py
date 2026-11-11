@@ -107,11 +107,11 @@ def build(page_list, previous: bytes | None = None, config: tuple[str, str] | No
     config = config or settings()
     hashes = [text_hash(page.text) for page in page_list]
     old = unpack(previous, config)
-    reusable = dict(zip(*old)) if old is not None else {}
+    reusable = dict(zip(*old, strict=False)) if old is not None else {}
     missing = list(dict.fromkeys(value for value in hashes if value not in reusable))
     if missing:
         by_hash = {text_hash(page.text): page.text for page in page_list}
-        reusable.update(zip(missing, request([by_hash[value] for value in missing], config)))
+        reusable.update(zip(missing, request([by_hash[value] for value in missing], config), strict=False))
     return pack(config, hashes, [reusable[value] for value in hashes])
 
 

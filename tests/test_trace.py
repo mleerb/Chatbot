@@ -13,8 +13,8 @@ from langchain_core.tools import StructuredTool
 from langfuse import Langfuse
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-from opentelemetry.trace import Status, StatusCode
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.trace import Status, StatusCode
 
 from app.core import trace
 from app.dependencies import session_for
@@ -160,12 +160,11 @@ class TracingTests(unittest.TestCase):
         )
 
     def test_disabled_without_credentials(self):
-        with patch.dict(os.environ, {}, clear=True):
-            with trace.trace_chat_turn(
-                session_id="test-session", question="Hi", model="fake", has_document=False
-            ) as (handler, span):
-                self.assertIsNone(handler)
-                self.assertIsNone(span)
+        with patch.dict(os.environ, {}, clear=True), trace.trace_chat_turn(
+            session_id="test-session", question="Hi", model="fake", has_document=False
+        ) as (handler, span):
+            self.assertIsNone(handler)
+            self.assertIsNone(span)
 
     def test_failed_turn_marks_root_error_without_leaking_exception(self):
         span = Mock()

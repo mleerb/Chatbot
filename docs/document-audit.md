@@ -2,7 +2,7 @@
 
 ## Result: usable local document-chat baseline; semantic retrieval blocked
 
-The 05/11 live audit used synthetic data only, with the existing configured model, LlamaParse tier and embedding gateway. Eight chat requests and seven uploads ran against the deployed backend HTTP API. Five temporary accounts and all seven upload inspection snapshots were removed afterward. No user uploads were inspected, credentials changed, provider bypass added or Git commit made. A private synthetic evidence report remains at `.workspace/audits/78b58dbf771646729bddc1f404eb8da5/report.json`.
+The 05/11 live audit used synthetic data only, with the existing configured model, LlamaParse tier and embedding gateway. Eight chat requests and seven uploads ran against the deployed backend HTTP API. Five temporary accounts and all seven upload inspection snapshots were removed afterward. No user uploads were inspected, credentials changed, provider bypass added or Git commit made. The private synthetic evidence report (`.workspace/audits/<run-id>/report.json`) was deleted on 11/11 at the operator's request; this page is the record.
 
 These are sampled acceptance results, not a guarantee of arbitrary-document accuracy or production readiness. No LLM judge was used: known facts, source text, HTTP responses and trace observations were checked directly, with manual review for honesty and instruction handling.
 

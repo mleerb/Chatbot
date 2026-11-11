@@ -3,9 +3,9 @@ from unittest.mock import patch
 
 from jinja2 import UndefinedError
 
+from app.prompts import render_prompt
 from app.services.agent import make_agent
 from app.services.context import conversation_messages
-from app.prompts import render_prompt
 from app.services.sessions import Upload
 
 

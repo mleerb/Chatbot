@@ -1,3 +1,4 @@
+import contextlib
 import io
 import json
 import os
@@ -6,7 +7,7 @@ import shutil
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -36,7 +37,7 @@ class DocumentAudit:
         self.uploads = []
         self.clients = []
         self.chat_count = 0
-        self.report = {"id": self.identifier, "started_at": datetime.now(timezone.utc).isoformat(),
+        self.report = {"id": self.identifier, "started_at": datetime.now(UTC).isoformat(),
                        "cases": [], "uploads": [], "checks": [], "chat_requests": 0}
 
     def save(self):
@@ -91,7 +92,7 @@ class DocumentAudit:
             chunks = [(label, text) for label, text in row.pages]
             vectors = row.embeddings
         exact = all((target / entry["file"]).read_text() == text
-                    for entry, (_, text) in zip(manifest["chunks"], chunks))
+                    for entry, (_, text) in zip(manifest["chunks"], chunks, strict=False))
         info = {"filename": filename, "upload_id": identifier, "status": result["status"],
                 "seconds": round(time.monotonic() - started, 2), "parser": manifest["parser"],
                 "chunk_count": len(chunks), "characters": len(document),
@@ -250,10 +251,8 @@ class DocumentAudit:
             self.chat(unsupported, "unsupported_file_honesty", "Can you analyze the contents of audit-unsupported.exe? Do not execute it. Explain if its contents could not be read.")
         finally:
             for client in self.clients:
-                try:
+                with contextlib.suppress(Exception):
                     self.request(client, "/api/auth/logout", {})
-                except Exception:
-                    pass
             with database_session() as database:
                 for identifier in self.users:
                     database.execute(delete(User).where(User.id == identifier))
@@ -262,7 +261,7 @@ class DocumentAudit:
                 if target.exists():
                     shutil.rmtree(target)
             self.report["cleanup"] = {"test_accounts_removed": len(self.users), "test_snapshots_removed": len(self.uploads)}
-            self.report["finished_at"] = datetime.now(timezone.utc).isoformat()
+            self.report["finished_at"] = datetime.now(UTC).isoformat()
             self.save()
             print("REPORT", str(self.output / "report.json"), flush=True)
 

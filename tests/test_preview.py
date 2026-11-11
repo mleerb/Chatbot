@@ -9,7 +9,8 @@ from fastapi.testclient import TestClient
 from openpyxl import Workbook
 
 from app.main import app
-from app.services import preview, sessions as registry
+from app.services import preview
+from app.services import sessions as registry
 from app.services.sessions import Download
 from app.tools.create import create_file_tool
 from tests.fake_database import mock_database

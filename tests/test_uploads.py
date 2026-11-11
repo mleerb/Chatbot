@@ -69,7 +69,7 @@ class UploadTests(unittest.TestCase):
                 }))
         for item in self.client.get('/api/state').json()['uploads']:
             self.assertEqual(len(item['edits']), 2)
-            for revision, prefix in zip(item['edits'], (b'new', b'final')):
+            for revision, prefix in zip(item['edits'], (b'new', b'final'), strict=False):
                 for _ in range(3):
                     response = self.client.get('/api/document/edited', params={
                         'file_id': item['id'], 'revision_id': revision['id'],

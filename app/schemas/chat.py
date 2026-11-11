@@ -3,8 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.schemas.documents import DownloadInfo, UploadResponse
 from app.schemas.conversations import ConversationResponse
+from app.schemas.documents import DownloadInfo, UploadResponse
 
 
 class ChatRequest(BaseModel):

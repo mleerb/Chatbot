@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import stat
 import tempfile
 import unittest
@@ -47,10 +48,14 @@ class WorkspaceTests(unittest.TestCase):
         self.assertFalse(self.root.exists())
         with patch.dict(os.environ, {"WORKSPACE_EXPORT_GUESTS": "true"}):
             workspace.export_upload(session, item, {"parser": "local"})
+        exported = session.session_id
         session.clear()
+        self.assertNotEqual(session.session_id, exported)
         target = self.root / "uploads" / item.id
         manifest = json.loads((target / "manifest.json").read_text())
         self.assertEqual(manifest["session_kind"], "guest")
+        self.assertEqual(manifest["session_id"], exported)
+        self.assertIn(f"- Session: {exported} (guest)", (target / "split.md").read_text())
         self.assertIsNone(manifest["user_id"])
         self.assertEqual((target / "chunks/001.txt").read_text(), "Guest debug text")
         self.assertEqual(json.loads((target / "steps.json").read_text())[3]["result"], "guest_upload_in_memory")
@@ -86,6 +91,18 @@ class WorkspaceTests(unittest.TestCase):
         steps = json.loads((target / "steps.json").read_text())
         self.assertEqual([s["step"] for s in steps], ["extract", "split", "embed", "persist", "context"])
         self.assertEqual(steps[2]["result"], "not_needed")
+        self.assertRegex(manifest["session_id"], r"^s-[0-9a-f]{8}$")
+        self.assertEqual(manifest["session_id"], self.session.session_id)
+        summary = (target / "split.md").read_text()
+        self.assertIn(f"- Session: {self.session.session_id} (account)", summary)
+        self.assertIn("1. Extract: Read locally; LlamaParse was not used.", summary)
+        self.assertIn("chunks of at most 3,000 characters at a paragraph break", summary)
+        self.assertIn(f"3. Result: {len(item.pages)} chunks in chunks/.", summary)
+        rows = re.findall(r"^   \| (chunks/\d{3}\.txt) \| (.+?) \| ([\d,]+) \|", summary, re.MULTILINE)
+        self.assertEqual(rows, [(entry["file"], entry["label"], f"{entry['characters']:,}")
+                                for entry in manifest["chunks"]])
+        self.assertIn("5. Chat context: the whole text is sent", summary)
+        self.assertNotIn("First paragraph", summary)
         for path in [self.root, *self.root.rglob("*")]:
             self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o700 if path.is_dir() else 0o600)
 
@@ -108,6 +125,12 @@ class WorkspaceTests(unittest.TestCase):
         self.assertNotEqual((target / "extracted.txt").read_text(), text)
         self.assertEqual([p.read_text() for p in sorted((target / "chunks").glob("*.txt"))],
                          [p.text for p in source_pages(original)])
+        summary = (target / "split.md").read_text()
+        self.assertIn("1. Extract: Read by LlamaParse. 6,520 characters in extracted.txt.", summary)
+        self.assertIn("LlamaParse returned 2 pages. A page longer than 6,000 characters", summary)
+        self.assertIn("   - page 5: 6,500 characters → 2 chunks", summary)
+        self.assertIn("   - page 9: 18 characters → 1 chunk\n", summary)
+        self.assertIn("| chunks/002.txt | 5 (part 2/2) |", summary)
 
     def test_parse_cache_and_fallback_results_are_recorded(self):
         for cached in [False, True]:
@@ -157,6 +180,7 @@ class WorkspaceTests(unittest.TestCase):
         target = self.root / "uploads" / item.id
         self.assertEqual(json.loads((target / "manifest.json").read_text())["chunk_count"], 0)
         self.assertEqual((target / "extracted.txt").read_text(), "")
+        self.assertIn("3. Result: no readable text, so there are no chunks.", (target / "split.md").read_text())
         item = self.item("word " * 7000)
         item.embeddings = b"private synthetic vector bytes"
         workspace.export_upload(self.session, item, {"parser": "local"})
@@ -164,9 +188,41 @@ class WorkspaceTests(unittest.TestCase):
         steps = json.loads((target / "steps.json").read_text())
         self.assertEqual(steps[2]["result"], "ready")
         self.assertEqual(steps[2]["dimensions"], 512)
+        summary = (target / "split.md").read_text()
+        self.assertIn("4. Embedding: Embeddings stored for semantic search.", summary)
+        self.assertIn("so the agent searches and reads chunks on demand.", summary)
         for path in target.rglob("*"):
             if path.is_file():
                 self.assertNotIn("private synthetic vector bytes", path.read_text())
+
+    def test_session_id_is_random_and_never_a_session_token(self):
+        first, second = ChatSession(), ChatSession(guest=True)
+        self.assertRegex(first.session_id, r"^s-[0-9a-f]{8}$")
+        self.assertNotEqual(first.session_id, second.session_id)
+        from fastapi import Response
+
+        from app.services import auth
+        from app.services.sessions import sessions, sessions_lock
+
+        session = ChatSession(guest=True, conversation_id=-1)
+        with sessions_lock:
+            sessions["synthetic-token"] = session
+        self.addCleanup(lambda: sessions.pop("synthetic-token", None))
+        auth.logout(("synthetic-token", session), Response())
+        session.guest, session.conversation_id = True, -1
+        item = self.item("Token check")
+        with patch.dict(os.environ, {"WORKSPACE_EXPORT_GUESTS": "true"}):
+            workspace.export_upload(session, item, {"parser": "local"})
+        for path in (self.root / "uploads" / item.id).rglob("*"):
+            if path.is_file():
+                self.assertNotIn("synthetic-token", path.read_text())
+
+    def test_filename_cannot_break_split_summary(self):
+        item = Upload("bad\nname|x.txt", b"Text", "Text", "", "Text ready for chat.", pages=text_pages("Text"))
+        workspace.export_upload(self.session, item, {"parser": "local"})
+        summary = (self.root / "uploads" / item.id / "split.md").read_text()
+        self.assertTrue(summary.startswith("# How bad name x.txt was split\n"))
+        self.assertIn("3. Result: 1 chunk in chunks/.", summary)
 
     def test_unsafe_directory_and_invalid_identifier_are_rejected(self):
         self.root.mkdir(mode=0o755)

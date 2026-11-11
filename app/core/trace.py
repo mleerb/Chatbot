@@ -1,8 +1,8 @@
 import logging
 import os
+from collections.abc import Iterator
 from contextlib import contextmanager
 from fnmatch import fnmatchcase
-from typing import Iterator
 
 from langfuse import Langfuse, propagate_attributes
 from langfuse.langchain import CallbackHandler
@@ -121,10 +121,9 @@ def trace_chat_turn(*, session_id: str, question: str, model: str,
     with client.start_as_current_observation(
         as_type="span", name="chat-response", input=question,
         metadata={"model": model, "has_document": has_document},
-    ) as span:
-        with propagate_attributes(session_id=session_id, tags=["document-chat"]):
-            try:
-                yield ChatTraceHandler(public_key=os.environ["LANGFUSE_PUBLIC_KEY"]), span
-            except Exception:
-                span.update(level="ERROR", status_message="Chat turn failed")
-                raise
+    ) as span, propagate_attributes(session_id=session_id, tags=["document-chat"]):
+        try:
+            yield ChatTraceHandler(public_key=os.environ["LANGFUSE_PUBLIC_KEY"]), span
+        except Exception:
+            span.update(level="ERROR", status_message="Chat turn failed")
+            raise

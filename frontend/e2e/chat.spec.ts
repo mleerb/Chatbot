@@ -124,6 +124,15 @@ test('conversation rename, pin, switch, delete confirmation and persistence', as
   await current.getByRole('button', { name: 'Options for Project notes', exact: true }).click();
   await expect(current.getByRole('button', { name: 'Unpin Project notes', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.keyboard.press('Escape');
+  const search = page.getByLabel('Search conversations');
+  await search.fill('PROJECT');
+  await expect(page.locator('.conversation-item')).toHaveCount(1);
+  await expect(page.locator('.conversation-item').first()).toContainText('Project notes');
+  await search.fill('no such title');
+  await expect(page.locator('.conversation-item')).toHaveCount(0);
+  await expect(page.getByText('No matching conversations.')).toBeVisible();
+  await search.press('Escape');
+  await expect(page.locator('.conversation-item')).toHaveCount(count + 1);
   await page.getByLabel('Your message').fill('Keep this history');
   await page.getByRole('button', { name: 'Send message' }).click();
   await expect(page.getByRole('button', { name: '+ New conversation', exact: true })).toBeEnabled();

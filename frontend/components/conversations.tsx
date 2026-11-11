@@ -8,15 +8,19 @@ type Props = {
   selected: number | null;
   busy: boolean;
   canPin: boolean;
+  canSearch: boolean;
   onCreate: () => Promise<void>;
   onSelect: (id: number) => Promise<void>;
   onUpdate: (id: number, changes: { title?: string; pinned?: boolean }) => Promise<boolean>;
   onDelete: (id: number) => Promise<boolean>;
 };
 
-export default function Conversations({ conversations, selected, busy, canPin, onCreate, onSelect, onUpdate, onDelete }: Props) {
+export default function Conversations({ conversations, selected, busy, canPin, canSearch, onCreate, onSelect, onUpdate, onDelete }: Props) {
   const [editing, setEditing] = useState<{ id: number; title: string } | null>(null);
   const [deleting, setDeleting] = useState<number | null>(null);
+  const [query, setQuery] = useState('');
+  const search = query.trim().toLowerCase();
+  const shown = search ? conversations.filter(chat => chat.title.toLowerCase().includes(search)) : conversations;
 
   async function rename(event: FormEvent) {
     event.preventDefault();
@@ -27,9 +31,15 @@ export default function Conversations({ conversations, selected, busy, canPin, o
     <div className="conversation-heading"><h2>Conversations</h2>
       <button className="text-button" type="button" disabled={busy} onClick={() => void onCreate()}>+ New conversation</button>
     </div>
+    {canSearch && conversations.length > 0 && <div className="conversation-search">
+      <label htmlFor="conversation-search" className="sr-only">Search conversations</label>
+      <input id="conversation-search" type="search" placeholder="Search conversations" value={query} maxLength={100}
+        onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setQuery(''); }} />
+    </div>}
     {!conversations.length && <p>No conversations yet. Start a new one.</p>}
+    {conversations.length > 0 && !shown.length && <p role="status">No matching conversations.</p>}
     <ul className="conversation-list">
-      {conversations.map(chat => <li key={chat.id} className="conversation-item" data-selected={chat.id === selected}>
+      {shown.map(chat => <li key={chat.id} className="conversation-item" data-selected={chat.id === selected}>
         <div className="conversation-row"><button className="conversation-link" type="button" disabled={busy}
           aria-current={chat.id === selected ? 'page' : undefined} onClick={() => void onSelect(chat.id)}>
           <Icon name={chat.pinned ? 'pin' : 'chat'} /><span>{chat.title}</span>

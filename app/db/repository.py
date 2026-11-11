@@ -5,7 +5,6 @@ from app.db.connection import get_engine, session
 from app.db.models import Account, ChatFile, Conversation, Message, Usage, User
 from app.db.schema import initialize_schema
 
-
 DEFAULT_TITLE = "New conversation"
 
 

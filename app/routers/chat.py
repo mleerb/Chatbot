@@ -22,9 +22,10 @@ def chat(payload: ChatRequest, current: Session):
 
 def server_events(events):
     for event in events:
+        payload = event
         if event["type"] == "done":
-            event = {"type": "done", **ChatResponse.model_validate(event).model_dump(mode="json")}
-        yield f"data: {json.dumps(event)}\n\n"
+            payload = {"type": "done", **ChatResponse.model_validate(event).model_dump(mode="json")}
+        yield f"data: {json.dumps(payload)}\n\n"
 
 
 @router.post("/chat/stream", response_class=StreamingResponse)

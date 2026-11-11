@@ -1,8 +1,8 @@
 import os
 import unittest
-from datetime import datetime, timedelta, timezone
-from uuid import uuid4
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
+from uuid import uuid4
 
 import psycopg
 from sqlalchemy import create_engine, event, inspect, select, text
@@ -268,22 +268,22 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(repository.conversations(self.user["id"]), [self.chat])
 
     def test_usage_adds_within_a_day_and_restarts_on_the_next(self):
-        today = datetime(2026, 10, 22, 17, tzinfo=timezone.utc)
+        today = datetime(2026, 10, 22, 17, tzinfo=UTC)
         tomorrow = today + timedelta(days=1)
         self.assertIsNone(repository.usage(self.user["id"]))
         repository.add_usage(self.user["id"], 10, today)
         repository.add_usage(self.user["id"], 5, today)
         self.assertEqual(repository.usage(self.user["id"])["tokens"], 15)
-        self.assertEqual(repository.usage(self.user["id"])["window_start"].replace(tzinfo=timezone.utc), today)
+        self.assertEqual(repository.usage(self.user["id"])["window_start"].replace(tzinfo=UTC), today)
         repository.add_usage(self.user["id"], 7, tomorrow)
         item = repository.usage(self.user["id"])
         self.assertEqual(item["tokens"], 7)
-        self.assertEqual(item["window_start"].replace(tzinfo=timezone.utc), tomorrow)
+        self.assertEqual(item["window_start"].replace(tzinfo=UTC), tomorrow)
         other = repository.create_user("Other")
         self.assertIsNone(repository.usage(other["id"]))
 
     def test_upload_count_stops_at_limit_and_restarts_on_the_next_day(self):
-        today = datetime(2026, 10, 22, 17, tzinfo=timezone.utc)
+        today = datetime(2026, 10, 22, 17, tzinfo=UTC)
         tomorrow = today + timedelta(days=1)
         user = self.user["id"]
         self.assertTrue(repository.add_count(user, "uploads", today, 2))
@@ -300,7 +300,7 @@ class RepositoryTests(unittest.TestCase):
         self.assertFalse(repository.add_count(repository.create_user("Nobody")["id"], "uploads", today, 0))
 
     def test_image_count_is_separate_and_can_be_released(self):
-        today = datetime(2026, 10, 22, 17, tzinfo=timezone.utc)
+        today = datetime(2026, 10, 22, 17, tzinfo=UTC)
         user = self.user["id"]
         self.assertTrue(repository.add_count(user, "images", today, 1))
         self.assertFalse(repository.add_count(user, "images", today, 1))
@@ -348,6 +348,7 @@ class PostgresRepositoryTests(RepositoryTests):
     def test_concurrent_uploads_share_one_locked_capacity_budget(self):
         from concurrent.futures import ThreadPoolExecutor
         from threading import Barrier
+
         from app.core.errors import ServiceError
 
         barrier = Barrier(2)
@@ -361,14 +362,14 @@ class PostgresRepositoryTests(RepositoryTests):
             except ServiceError as exc:
                 return exc.status_code
 
-        with patch.dict(os.environ, {"CONVERSATION_MAX_FILES": "1"}):
-            with ThreadPoolExecutor(max_workers=2) as pool:
-                results = list(pool.map(upload, [1, 2]))
+        with patch.dict(os.environ, {"CONVERSATION_MAX_FILES": "1"}), ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(upload, [1, 2]))
         self.assertCountEqual(results, ["saved", 409])
         self.assertEqual(len(repository.conversation_files(self.user["id"], self.chat["id"])), 1)
 
     def test_auth_api_with_postgresql(self):
         from fastapi.testclient import TestClient
+
         from app.main import app
         from app.services.auth import attempts
         from app.services.sessions import COOKIE, sessions

@@ -1,9 +1,9 @@
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
+from app.prompts import render_prompt
 from app.services import pages
 from app.services.citations import current
-from app.prompts import render_prompt
 from app.services.sessions import Upload, sessions, sessions_lock
 
 FILE_ID = "ID of the uploaded file; optional only when exactly one file is uploaded"

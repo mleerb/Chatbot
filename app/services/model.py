@@ -1,7 +1,7 @@
 import os
 
-from langchain_openai import ChatOpenAI
 from langchain.chat_models import init_chat_model
+from langchain_openai import ChatOpenAI
 
 from app.core.limits import timeout
 

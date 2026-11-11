@@ -16,7 +16,7 @@ def table_rows(block: dict) -> list[list]:
     if (not isinstance(rows, list) or not rows or not isinstance(rows[0], list)
             or not rows[0] or not all(
                 isinstance(row, list) and len(row) == len(rows[0])
-                and all(isinstance(cell, (str, int, float)) for cell in row)
+                and all(isinstance(cell, str | int | float) for cell in row)
                 for row in rows
             )):
         raise ValueError("Table rows must be equally sized lists of text or numbers.")

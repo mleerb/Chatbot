@@ -4,12 +4,14 @@ import io
 from pathlib import Path
 
 from docx import Document
+from llama_cloud import APITimeoutError
 from PIL import Image, UnidentifiedImageError
 
 from app.core.file_types import IMAGE_EXTENSIONS, TEXT_EXTENSIONS
 from app.services import parse
 from app.services.pages import source_pages, text_pages
 from app.services.sessions import Page
+
 
 def extract_docx(data: bytes) -> str:
     document = Document(io.BytesIO(data))
@@ -77,7 +79,7 @@ def upload_context(filename: str, data: bytes,
     if parsed is None:
         try:
             parsed = parse.parse_file(filename, data)
-        except (parse.PollingTimeoutError, parse.APITimeoutError):
+        except (parse.PollingTimeoutError, APITimeoutError):
             if inspection is not None:
                 inspection["parse_result"] = "timeout_local_fallback"
             return text, image_url, f"LlamaParse timed out. Local extraction fallback: {status}", text_pages(text)

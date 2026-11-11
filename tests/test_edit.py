@@ -5,9 +5,9 @@ from unittest.mock import patch
 from docx import Document
 from fastapi.testclient import TestClient
 
+from app.main import app
 from app.services.sessions import sessions
 from app.tools.edit import create_edit_tool, replace_text
-from app.main import app
 from tests.fake_database import mock_database
 
 

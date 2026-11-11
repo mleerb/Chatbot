@@ -118,10 +118,9 @@ class AppTests(unittest.TestCase):
             "app.main.get_tracing_client"
         ) as tracing, patch("app.db.repository.initialize"), patch("app.main.flush_traces"), patch(
             "app.main.dispose_engine"
-        ):
-            with TestClient(self.app) as client:
-                tracing.assert_called_once_with()
-                self.assertEqual(client.get("/health").status_code, 200)
+        ), TestClient(self.app) as client:
+            tracing.assert_called_once_with()
+            self.assertEqual(client.get("/health").status_code, 200)
 
     def test_lifespan_disposes_engine_after_shutdown(self):
         with patch("app.db.repository.initialize"), patch("app.main.flush_traces"), patch(
@@ -135,9 +134,8 @@ class AppTests(unittest.TestCase):
         with patch("app.db.repository.initialize", side_effect=RuntimeError("startup failed")), patch(
             "app.main.flush_traces"
         ) as flush, patch("app.main.dispose_engine") as dispose:
-            with self.assertRaisesRegex(RuntimeError, "startup failed"):
-                with TestClient(self.app):
-                    pass
+            with self.assertRaisesRegex(RuntimeError, "startup failed"), TestClient(self.app):
+                pass
             flush.assert_called_once_with()
             dispose.assert_called_once_with()
 
@@ -145,16 +143,14 @@ class AppTests(unittest.TestCase):
         with patch("app.db.repository.initialize"), patch(
             "app.main.flush_traces", side_effect=RuntimeError("flush failed")
         ), patch("app.main.dispose_engine") as dispose:
-            with self.assertRaisesRegex(RuntimeError, "flush failed"):
-                with TestClient(self.app):
-                    pass
+            with self.assertRaisesRegex(RuntimeError, "flush failed"), TestClient(self.app):
+                pass
             dispose.assert_called_once_with()
 
     def test_lifespan_flushes_after_failure(self):
         with patch("app.db.repository.initialize"), patch("app.main.flush_traces") as flush:
-            with self.assertRaisesRegex(RuntimeError, "test failure"):
-                with TestClient(self.app):
-                    raise RuntimeError("test failure")
+            with self.assertRaisesRegex(RuntimeError, "test failure"), TestClient(self.app):
+                raise RuntimeError("test failure")
             flush.assert_called_once_with()
 
 

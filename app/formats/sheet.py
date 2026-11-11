@@ -17,7 +17,7 @@ def make_xlsx(content: str) -> bytes:
             raise ValueError("Each sheet needs a name and a rows array.")
         worksheet = workbook.create_sheet(sheet["name"])
         for index, row in enumerate(sheet["rows"], start=1):
-            if not isinstance(row, list) or not all(value is None or isinstance(value, (str, int, float, bool)) for value in row):
+            if not isinstance(row, list) or not all(value is None or isinstance(value, str | int | float | bool) for value in row):
                 raise ValueError("Sheet rows must contain text, numbers, booleans or null.")
             for column, value in enumerate(row, start=1):
                 cell = worksheet.cell(index, column, value)

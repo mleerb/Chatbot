@@ -3,9 +3,8 @@ import re
 
 import numpy as np
 
-from app.services import embed, storage
-
 from app.prompts import render_prompt
+from app.services import embed, storage
 from app.services.sessions import Page, Upload
 
 PAGE_CHARS = 3000
@@ -149,7 +148,7 @@ def ranked(items: list[Upload], query: str, session=None):
                     except Exception:
                         logger.warning("Could not persist file embeddings; will retry on a later search")
         vectors, indices = [], []
-        for index, (item, number, page) in enumerate(entries):
+        for index, (item, number, _page) in enumerate(entries):
             if number == 1:
                 decoded = embed.unpack(item.embeddings, config)
                 if decoded is not None and decoded[0] != [embed.text_hash(part.text) for part in item.pages]:

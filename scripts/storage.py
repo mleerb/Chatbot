@@ -1,4 +1,5 @@
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -11,7 +12,7 @@ import tarfile
 import time
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -221,10 +222,8 @@ def make_directory(path):
     descriptor = os.open(path.anchor, os.O_RDONLY | os.O_DIRECTORY)
     try:
         for part in path.parts[1:]:
-            try:
+            with contextlib.suppress(FileExistsError):
                 os.mkdir(part, mode=0o700, dir_fd=descriptor)
-            except FileExistsError:
-                pass
             child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=descriptor)
             os.close(descriptor)
             descriptor = child
@@ -241,7 +240,7 @@ def backup(destination, workspace, include_config=False, timeout=600):
     with directory(destination) as parent:
         if os.fstat(parent).st_mode & 0o077:
             raise ValueError("Backup parent directory must be private (0700)")
-        name = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ-") + uuid.uuid4().hex[:12]
+        name = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ-") + uuid.uuid4().hex[:12]
         os.mkdir(name, mode=0o700, dir_fd=parent)
         with child_directory(parent, name) as output:
             with private_file(output, "INCOMPLETE") as marker:
@@ -260,22 +259,22 @@ def backup(destination, workspace, include_config=False, timeout=600):
                         raise ValueError("Workspace changed during backup; retry while uploads are idle")
                 names.append("workspace.tar.gz")
             if include_config:
-                with directory(ROOT) as source, private_file(output, "config.tar.gz") as stream:
-                    with tarfile.open(fileobj=stream, mode="w:gz") as archive:
-                        for filename in (".env", ".docker.env", "compose.yaml", "compose.override.yaml", "compose.workspace.yaml"):
-                            try:
-                                descriptor = os.open(filename, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=source)
-                            except FileNotFoundError:
-                                continue
-                            with os.fdopen(descriptor, "rb") as config:
-                                info = os.fstat(config.fileno())
-                                if not stat.S_ISREG(info.st_mode):
-                                    raise ValueError("Private configuration must be a regular file")
-                                member = tarfile.TarInfo("config/" + filename)
-                                member.mode, member.size = 0o600, info.st_size
-                                archive.addfile(member, config)
+                with (directory(ROOT) as source, private_file(output, "config.tar.gz") as stream,
+                      tarfile.open(fileobj=stream, mode="w:gz") as archive):
+                    for filename in (".env", ".docker.env", "compose.yaml", "compose.override.yaml", "compose.workspace.yaml"):
+                        try:
+                            descriptor = os.open(filename, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=source)
+                        except FileNotFoundError:
+                            continue
+                        with os.fdopen(descriptor, "rb") as config:
+                            info = os.fstat(config.fileno())
+                            if not stat.S_ISREG(info.st_mode):
+                                raise ValueError("Private configuration must be a regular file")
+                            member = tarfile.TarInfo("config/" + filename)
+                            member.mode, member.size = 0o600, info.st_size
+                            archive.addfile(member, config)
                 names.append("config.tar.gz")
-            manifest = {"version": 1, "created_at": datetime.now(timezone.utc).isoformat(),
+            manifest = {"version": 1, "created_at": datetime.now(UTC).isoformat(),
                         "files": {name: digest_file(output, name) for name in names},
                         "source_before": before, "source_after": database_report(timeout=timeout, fingerprint=True),
                         "warning": "Private data and password hashes; configuration archive may include provider secrets. Database and workspace are not one atomic snapshot."}
