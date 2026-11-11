@@ -6,7 +6,7 @@ import httpx
 from openai import APITimeoutError
 
 from app.core.errors import ServiceError
-from app.core.trace import score_answer
+from app.core.trace import guest_tracing, score_answer
 from app.db import repository
 from app.services import citations, guest, images, quota
 from app.services.agent import answer_question, make_agent, stream_answer
@@ -105,7 +105,7 @@ def finish_turn(token: str, session: ChatSession, question: str, replace_from: i
         answer, stopped = produce(
             make_agent(token, question, sources), question, session.history, token,
             uploads=list(session.uploads.values()), usage=usage, traces=traces,
-            **({"trace": False} if session.guest else {}),
+            trace=not session.guest or guest_tracing(), trace_session=session.session_id, guest=session.guest,
         )
     except ServiceError:
         raise
@@ -135,6 +135,7 @@ def finish_turn(token: str, session: ChatSession, question: str, replace_from: i
     ]
     tokens = sum(usage) or estimate_tokens(question + answer)
     if session.guest:
+        turn_messages[1]["trace_id"] = trace_id
         guest.add_usage(session, tokens)
         chat = guest.active(session)
         if replace_from is None:
@@ -235,12 +236,13 @@ def rate(session: ChatSession, index: int, rating: str | None):
             if not 0 <= index < len(items) or items[index]["role"] != "assistant":
                 raise ServiceError(404, "Message not found")
             items[index]["rating"] = rating
-            return {"rating": rating}
-        if session.user_id is None or session.conversation_id is None:
-            raise ServiceError(404, "Message not found")
-        rated = repository.rate_message(session.user_id, session.conversation_id, index, rating)
-        if rated is None:
-            raise ServiceError(404, "Message not found")
+            rated = {"trace_id": items[index].get("trace_id")}
+        else:
+            if session.user_id is None or session.conversation_id is None:
+                raise ServiceError(404, "Message not found")
+            rated = repository.rate_message(session.user_id, session.conversation_id, index, rating)
+            if rated is None:
+                raise ServiceError(404, "Message not found")
     if rated["trace_id"]:
         score_answer(rated["trace_id"], rating)
     return {"rating": rating}

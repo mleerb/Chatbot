@@ -208,9 +208,16 @@ class TracingTests(unittest.TestCase):
         root = next(s for s in spans if s.name == "chat-response")
         self.assertIsNone(root.parent)
         self.assertEqual(root.attributes["session.id"], "test-session")
-        self.assertEqual(root.attributes["langfuse.observation.metadata.model"], "fake")
+        self.assertIn("account", next(value for key, value in root.attributes.items() if key.endswith("tags")))
+        self.assertEqual(json.loads(root.attributes["langfuse.observation.metadata.model"]), "fake")
         generations = [s for s in spans if s.attributes.get("langfuse.observation.type") == "generation"]
         self.assertEqual([s.name for s in generations], ["generate-response"])
+        for span in spans:
+            if span.attributes.get("langfuse.observation.type"):
+                self.assertEqual(span.attributes["session.id"], "test-session")
+                self.assertEqual(next(value for key, value in span.attributes.items() if key.endswith("trace.name")),
+                                 "chat-response")
+                self.assertIn("account", next(value for key, value in span.attributes.items() if key.endswith("tags")))
         self.assertFalse(trace.INTERNAL_STEPS.intersection(s.name for s in spans))
         self.assertIn("LangGraph", [s.name for s in spans])
         self.assertIn("model", [s.name for s in spans])
@@ -219,6 +226,18 @@ class TracingTests(unittest.TestCase):
             "Top secret" not in str(s.attributes)
             and "The answer is 42" not in str(s.attributes) for s in spans
         ))
+
+    def test_guest_turn_is_tagged_guest_and_session_is_optional(self):
+        with self.capture() as exporter:
+            with trace.trace_chat_turn(session_id=None, question="Hi", model="fake", has_document=False,
+                                       guest=True) as (handler, span):
+                span.update(output="Hello")
+            trace._client.flush()
+        root = next(s for s in exporter.get_finished_spans() if s.name == "chat-response")
+        tags = next(value for key, value in root.attributes.items() if key.endswith("tags"))
+        self.assertIn("guest", tags)
+        self.assertNotIn("account", tags)
+        self.assertNotIn("session.id", root.attributes)
 
     def test_tool_trace_keeps_each_generation_tool_result_and_usage(self):
         tool = StructuredTool.from_function(

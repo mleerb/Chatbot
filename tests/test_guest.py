@@ -1,3 +1,4 @@
+import os
 import unittest
 from contextlib import ExitStack
 from datetime import datetime, timedelta
@@ -60,7 +61,9 @@ class GuestTests(unittest.TestCase):
         self.assertIn('HttpOnly', cookie)
         self.assertNotIn(response.json()['guest_token'], cookie)
         self.assertEqual(self.send('First').status_code, 200)
-        with patch('app.services.chat.make_agent'), patch('app.services.chat.answer_question', return_value='Second') as answer:
+        with patch.dict(os.environ, {'LANGFUSE_TRACE_GUESTS': 'false'}), patch('app.services.chat.make_agent'), patch(
+            'app.services.chat.answer_question', return_value='Second'
+        ) as answer:
             self.client.post('/api/chat', json={'message': 'Continue'})
             self.assertEqual(answer.call_args.args[2][0]['content'], 'First')
             self.assertFalse(answer.call_args.kwargs['trace'])
@@ -282,6 +285,24 @@ class GuestTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/state').status_code, 401)
         download = self.client.get('/api/document/download', params={'file_id': item['id']}, headers={'x-guest-session': token})
         self.assertEqual(download.content, b'tab-only')
+
+    def test_guest_tracing_setting_controls_trace_and_rating_score(self):
+        def answer(*args, traces=None, **kwargs):
+            traces.append('trace-guest')
+            return 'Answer'
+
+        self.start_guest()
+        with patch.dict(os.environ, {'LANGFUSE_TRACE_GUESTS': 'true'}), patch('app.services.chat.make_agent'), patch(
+            'app.services.chat.answer_question', side_effect=answer
+        ) as reply:
+            self.assertEqual(self.client.post('/api/chat', json={'message': 'Hi'}).status_code, 200)
+        self.assertTrue(reply.call_args.kwargs['trace'])
+        self.assertTrue(reply.call_args.kwargs['guest'])
+        self.assertRegex(reply.call_args.kwargs['trace_session'], r'^s-[0-9a-f]{8}$')
+        self.assertNotIn('trace_id', self.client.get('/api/state').json()['messages'][1])
+        with patch('app.services.chat.score_answer') as score:
+            self.assertEqual(self.client.post('/api/chat/rating', json={'index': 1, 'rating': 'up'}).json(), {'rating': 'up'})
+        score.assert_called_once_with('trace-guest', 'up')
 
     def test_guest_agent_does_not_export_langfuse_traces(self):
         from app.services.agent import answer_question

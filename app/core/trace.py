@@ -27,6 +27,10 @@ def tracing_enabled() -> bool:
     ))
 
 
+def guest_tracing() -> bool:
+    return os.getenv("LANGFUSE_TRACE_GUESTS", "false").lower() == "true"
+
+
 def mask_otel_spans(*, params: MaskOtelSpansParams) -> MaskOtelSpansResult | None:
     if os.getenv("LANGFUSE_TRACE_CONTENT", "false").lower() == "true":
         return None
@@ -111,8 +115,8 @@ def flush_traces() -> None:
 
 
 @contextmanager
-def trace_chat_turn(*, session_id: str, question: str, model: str,
-                    has_document: bool) -> Iterator[tuple[CallbackHandler | None, object | None]]:
+def trace_chat_turn(*, session_id: str | None, question: str, model: str, has_document: bool,
+                    guest: bool = False) -> Iterator[tuple[CallbackHandler | None, object | None]]:
     if not tracing_enabled():
         yield None, None
         return
@@ -121,7 +125,8 @@ def trace_chat_turn(*, session_id: str, question: str, model: str,
     with client.start_as_current_observation(
         as_type="span", name="chat-response", input=question,
         metadata={"model": model, "has_document": has_document},
-    ) as span, propagate_attributes(session_id=session_id, tags=["document-chat"]):
+    ) as span, propagate_attributes(**({"session_id": session_id} if session_id else {}), trace_name="chat-response",
+                                    tags=["document-chat", "guest" if guest else "account"]):
         try:
             yield ChatTraceHandler(public_key=os.environ["LANGFUSE_PUBLIC_KEY"]), span
         except Exception:

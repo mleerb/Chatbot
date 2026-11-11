@@ -322,7 +322,6 @@ export default function Chat() {
         <button type="button" className="icon-button close-sidebar" aria-label="Close sidebar" title="Close sidebar" onClick={hideSidebar}><Icon name="sidebar" /></button>
       </div>
       <div className="account-info"><span className="account-avatar" aria-hidden="true">{account?.name.slice(0, 1) ?? 'G'}</span><div><strong>{account?.name ?? 'Guest'}</strong><span>{guest ? 'This session only' : account?.email}</span></div></div>
-      {guest && <div className="guest-notice"><strong>Temporary chat</strong><p>Nothing is saved to your account. Guests have one chat at a time: starting a new chat deletes the current one. Closing the tab or restarting the server ends it. If upload inspection is enabled, the operator retains extracted upload text and chunks on disk until manually deleted.</p></div>}
       {(selected || guest) && <Conversations key={selected ?? 'guest'} conversations={conversations} selected={active} busy={locked} canPin={!guest} canSearch={!guest}
         onCreate={async () => { if (!guest || !conversations.length || window.confirm('Start a new chat? Your current guest chat and its files will be deleted.')) await conversationAction('/api/conversations', 'POST'); }}
         onSelect={async id => { await conversationAction(`/api/conversations/${id}/select`, 'POST'); }}

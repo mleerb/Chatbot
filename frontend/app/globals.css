@@ -422,9 +422,6 @@ svg { flex: none; }
 .auth-loading { margin: auto; color: var(--muted); }
 .guest-button { width: 100%; margin-top: 18px; padding: 12px 18px; border: 1px solid var(--line); border-radius: 999px; background: var(--user-surface); color: var(--text); font-size: 13px; }
 .guest-hint { margin: 10px 0 0; }
-.guest-notice { margin-top: 28px; padding: 16px; border: 1px solid var(--glass-border); border-radius: 18px; background: var(--user-surface); font-size: 12px; }
-.guest-notice p { color: var(--muted); font-size: 11px; line-height: 1.8; }
-.guest-notice button { margin-top: 8px; font-size: 11px; }
 @media (max-width: 520px) { .auth-screen { padding: 55px 8px 20px; } .auth-card { padding: 26px 22px; } .auth-card input { font-size: 16px; } .message.assistant { padding: 18px; } }
 @media (prefers-reduced-motion: no-preference) { .app, .sidebar, .chat-panel, .message, .auth-card { transition: background-color 300ms,color 300ms,border-color 300ms; } }
 @media (prefers-reduced-motion: reduce) {

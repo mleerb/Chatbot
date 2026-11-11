@@ -2,6 +2,7 @@ import json
 import os
 import threading
 import unittest
+from contextlib import nullcontext
 from unittest.mock import Mock, patch
 
 from fastapi.testclient import TestClient
@@ -170,11 +171,46 @@ class StreamEndpointTests(unittest.TestCase):
         with patch("app.services.quota.USER_TOKEN_LIMIT", 20):
             self.assertEqual(self.client.post("/api/chat/stream", json={"message": "Question"}).status_code, 403)
 
+    def traced(self):
+        calls = []
+
+        def record(**kwargs):
+            calls.append(kwargs)
+            return nullcontext((None, None))
+
+        return calls, patch("app.services.agent.trace_chat_turn", side_effect=record)
+
+    def test_account_trace_uses_random_session_id_not_login_cookie(self):
+        calls, tracer = self.traced()
+        with tracer:
+            events(self.stream(SCRIPT))
+        cookies = set(self.client.cookies.values())
+        self.assertTrue(cookies)
+        self.assertRegex(calls[0]["session_id"], r"^s-[0-9a-f]{8}$")
+        self.assertFalse(cookies & {str(value) for value in calls[0].values()})
+        self.assertFalse(calls[0]["guest"])
+
+    def test_guest_stream_is_traced_when_enabled_without_guest_token(self):
+        self.client.post("/api/auth/logout")
+        token = self.client.post("/api/auth/guest").json()["guest_token"]
+        self.client.headers["x-guest-session"] = token
+        calls, tracer = self.traced()
+        with patch.dict(os.environ, {"LANGFUSE_TRACE_GUESTS": "true"}), tracer, patch(
+            "app.db.repository.save_turn"
+        ) as save:
+            events(self.stream(SCRIPT))
+        save.assert_not_called()
+        self.assertTrue(calls[0]["guest"])
+        self.assertRegex(calls[0]["session_id"], r"^s-[0-9a-f]{8}$")
+        self.assertNotIn(token, [str(value) for value in calls[0].values()])
+
     def test_guest_stream_is_not_traced_or_stored(self):
         self.client.post("/api/auth/logout")
         token = self.client.post("/api/auth/guest").json()["guest_token"]
         self.client.headers["x-guest-session"] = token
-        with patch("app.services.agent.trace_chat_turn") as trace, patch("app.db.repository.save_turn") as save:
+        with patch.dict(os.environ, {"LANGFUSE_TRACE_GUESTS": "false"}), patch(
+            "app.services.agent.trace_chat_turn"
+        ) as trace, patch("app.db.repository.save_turn") as save:
             items = events(self.stream(SCRIPT))
         trace.assert_not_called()
         save.assert_not_called()

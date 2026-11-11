@@ -25,7 +25,8 @@ for (const width of [1440, 360]) {
     await page.getByRole('link', { name: 'Download temporary.txt', exact: true }).click();
     expect((await downloading).suggestedFilename()).toBe('temporary.txt');
     if (width <= 760) await page.getByRole('button', { name: 'Open sidebar' }).click();
-    await expect(page.locator('.guest-notice')).toContainText('starting a new chat deletes the current one');
+    await expect(page.locator('.guest-notice')).toHaveCount(0);
+    await expect(page.locator('.sidebar-footer')).toContainText('Guest chats last while this tab is open.');
     await page.getByRole('button', { name: 'Options for A guest question', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Pin A guest question', exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: 'Rename A guest question', exact: true }).click();

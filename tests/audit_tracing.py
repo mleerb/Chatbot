@@ -95,9 +95,10 @@ def worker(run_id, control=False):
             ])
             return create_deep_agent(model=model, tools=create_page_tools(run_id), system_prompt="Synthetic acceptance only")
 
-        result = answer_question(agent(), markers["message"], [], run_id, [item], traces=identifiers)
+        result = answer_question(agent(), markers["message"], [], run_id, [item], traces=identifiers, trace_session=run_id)
         assert markers["file"] in result and all(seen.values())
-        events = list(stream_answer(agent(), markers["message"], [], run_id, [item], traces=identifiers))
+        events = list(stream_answer(agent(), markers["message"], [], run_id, [item], traces=identifiers,
+                                    trace_session=run_id))
         assert any(event.get("type") == "text" and markers["answer"] in event.get("text", "") for event in events)
         guest_traces = []
         answer_question(agent(), markers["message"], [], run_id, [item], trace=False, traces=guest_traces)
@@ -122,7 +123,7 @@ def cli_environment():
 
 
 def observations(env, **filters):
-    arguments = ["npx", "--yes", "langfuse-cli", "api", "observations", "list", "--json", "--fields", FIELDS,
+    arguments = ["npx", "--yes", "langfuse-cli@1.3.1", "api", "observations", "list", "--json", "--fields", FIELDS,
                  "--limit", "1000"]
     rows = []
     cursor = None

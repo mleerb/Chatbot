@@ -42,22 +42,24 @@ def chunk_text(content: str | list) -> str:
     return ""
 
 
-def observe(session_id: str, question: str, uploads: list[Upload] | None, trace: bool):
+def observe(trace_session: str | None, question: str, uploads: list[Upload] | None, trace: bool, guest: bool):
     if not trace:
         return nullcontext((None, None))
     return trace_chat_turn(
-        session_id=session_id,
+        session_id=trace_session,
         question=question,
         model=os.getenv("CHAT_MODEL", "openai:gpt-4o-mini").strip(),
         has_document=bool(uploads),
+        guest=guest,
     )
 
 
 def answer_question(agent, question: str, history: list[dict], session_id: str,
                     uploads: list[Upload] | None = None, trace: bool = True,
-                    usage: list[int] | None = None, traces: list[str] | None = None) -> str:
+                    usage: list[int] | None = None, traces: list[str] | None = None,
+                    trace_session: str | None = None, guest: bool = False) -> str:
     messages = conversation_messages(question, history, uploads, evidence=current(session_id))
-    with observe(session_id, question, uploads, trace) as (handler, span):
+    with observe(trace_session, question, uploads, trace, guest) as (handler, span):
         config = {"callbacks": [handler]} if handler else None
         result = agent.invoke({"messages": messages}, config=config)
         answer = response_text(result["messages"][-1].content)
@@ -75,10 +77,11 @@ def answer_question(agent, question: str, history: list[dict], session_id: str,
 def stream_answer(agent, question: str, history: list[dict], session_id: str,
                   uploads: list[Upload] | None = None, trace: bool = True,
                   usage: list[int] | None = None, traces: list[str] | None = None,
-                  stop: threading.Event | None = None) -> Iterator[dict]:
+                  stop: threading.Event | None = None, trace_session: str | None = None,
+                  guest: bool = False) -> Iterator[dict]:
     messages = conversation_messages(question, history, uploads, evidence=current(session_id))
     filenames = {item.id: item.filename for item in uploads or []}
-    with observe(session_id, question, uploads, trace) as (handler, span):
+    with observe(trace_session, question, uploads, trace, guest) as (handler, span):
         config = {"callbacks": [handler]} if handler else None
         draft, answer, total, stopped = [], "", 0, False
         stream = agent.stream({"messages": messages}, config=config, stream_mode=["messages", "updates"])
